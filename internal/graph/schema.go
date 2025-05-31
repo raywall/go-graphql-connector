@@ -1,218 +1,164 @@
 package graph
 
 import (
+	"encoding/json"
+	"io/ioutil"
+	"log"
+
 	"github.com/graphql-go/graphql"
 )
 
-func CreateSchema(res Resolver) (*graphql.Schema, error) {
-	possibilidadeHabilitacaoType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "PossibilidadeHabilitacao",
-		Fields: graphql.Fields{
-			"plataformas": &graphql.Field{Type: graphql.NewList(graphql.String)},
-			"modalidades": &graphql.Field{Type: graphql.NewList(graphql.String)},
-			"canais":      &graphql.Field{Type: graphql.NewList(graphql.String)},
-		},
-	})
+type FieldConfig struct {
+	Name   string      `json:"name"`
+	Type   string      `json:"type"`
+	OfType string      `json:"ofType,omitempty"`
+	Args   []ArgConfig `json:"args,omitempty"`
+}
 
-	convenioType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Convenio",
-		Fields: graphql.Fields{
-			"codigoConvenio":                   &graphql.Field{Type: graphql.Int},
-			"nomeConvenio":                     &graphql.Field{Type: graphql.String},
-			"apelidoConvenio":                  &graphql.Field{Type: graphql.String},
-			"codigoFq3PessoaJuridica":          &graphql.Field{Type: graphql.String},
-			"codigoTq3InquilinoPessoaJuridica": &graphql.Field{Type: graphql.String},
-			"grupoConsignacao":                 &graphql.Field{Type: graphql.String},
-			"numeroContratoMae":                &graphql.Field{Type: graphql.String},
-			"instituicaoFinanceira":            &graphql.Field{Type: graphql.String},
-			"segmento":                         &graphql.Field{Type: graphql.String},
-			"situacaoConvenio":                 &graphql.Field{Type: graphql.String},
-			"possibilidadeHabilitacao":         &graphql.Field{Type: possibilidadeHabilitacaoType},
-		},
-	})
+type TypeConfig struct {
+	Name   string        `json:"name"`
+	Fields []FieldConfig `json:"fields"`
+}
 
-	limiteOperacionalType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "LimiteOperacional",
-		Fields: graphql.Fields{
-			"percentualMaximoMargemConsignavel":            &graphql.Field{Type: graphql.Float},
-			"percentualMaximoMargemConsignavelRestricao":   &graphql.Field{Type: graphql.Float},
-			"tipoMargemConsignavelRestricao":               &graphql.Field{Type: graphql.String},
-			"tipoTaxaMaximaRegulada":                       &graphql.Field{Type: graphql.String},
-			"percentualTaxaMaximaRegulada":                 &graphql.Field{Type: graphql.Float},
-			"quantidadeMinimaPrazo":                        &graphql.Field{Type: graphql.Int},
-			"quantidadeMaximaPrazo":                        &graphql.Field{Type: graphql.Int},
-			"quantidadeMaximaContratacoes":                 &graphql.Field{Type: graphql.Int},
-			"valorMinimoContratacao":                       &graphql.Field{Type: graphql.Float},
-			"valorMaximoContratacao":                       &graphql.Field{Type: graphql.Float},
-			"valorMinimoParcela":                           &graphql.Field{Type: graphql.Float},
-			"idadeMinimaContratacao":                       &graphql.Field{Type: graphql.Int},
-			"idadeMaximaContratacao":                       &graphql.Field{Type: graphql.Int},
-			"valorMinimoTroco":                             &graphql.Field{Type: graphql.Float},
-			"quantidadeMaximaDiasAtraso":                   &graphql.Field{Type: graphql.Int},
-			"percentualMinimoSaldoDevedorQuitado":          &graphql.Field{Type: graphql.Float},
-			"quantidadeMinimaParcelasPagas":                &graphql.Field{Type: graphql.Int},
-			"quantidadeMaximaParcelasAtraso":               &graphql.Field{Type: graphql.Int},
-			"quantidadeMaximaContratosRefinanciadosPorVez": &graphql.Field{Type: graphql.Int},
-			"quantidadeMinimaParcelasVencer":               &graphql.Field{Type: graphql.Int},
-		},
-	})
+type ArgConfig struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	OfType string `json:"ofType,omitempty"`
+}
 
-	prazoFundingType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "PrazoFunding",
-		Fields: graphql.Fields{
-			"prazo":       &graphql.Field{Type: graphql.Int},
-			"taxaFunding": &graphql.Field{Type: graphql.Float},
-		},
-	})
+type QueryConfig struct {
+	Name   string        `json:"name"`
+	Fields []FieldConfig `json:"fields"`
+}
 
-	taxaFundingType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "TaxaFunding",
-		Fields: graphql.Fields{
-			"dataFunding": &graphql.Field{Type: graphql.String},
-			"prazos":      &graphql.Field{Type: graphql.NewList(prazoFundingType)},
-		},
-	})
+type SchemaConfig struct {
+	Types []TypeConfig `json:"types"`
+	Query QueryConfig  `json:"query"`
+}
 
-	domicilioBancarioType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "DomicilioBancario",
-		Fields: graphql.Fields{
-			"codigoAgencia": &graphql.Field{Type: graphql.String},
-			"codigoBanco":   &graphql.Field{Type: graphql.Int},
-			"numeroConta":   &graphql.Field{Type: graphql.String},
-		},
-	})
+var typeMap map[string]*graphql.Object
 
-	especieBeneficioType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "EspecieBeneficio",
-		Fields: graphql.Fields{
-			"codigo":    &graphql.Field{Type: graphql.Int},
-			"descricao": &graphql.Field{Type: graphql.String},
-		},
-	})
+func getGraphQLType(field FieldConfig, typeMap map[string]*graphql.Object) graphql.Output {
+	switch field.Type {
+	case "Int":
+		return graphql.Int
+	case "Boolean":
+		return graphql.Boolean
+	case "Float":
+		return graphql.Float
+	case "String":
+		return graphql.String
+	case "List":
+		if field.OfType == "" {
+			log.Fatalf("List type must specify ofType")
+		}
+		if basicType, exists := map[string]graphql.Type{
+			"Int":    graphql.Int,
+			"String": graphql.String,
+		}[field.OfType]; exists {
+			return graphql.NewList(basicType)
+		}
+		if objType, exists := typeMap[field.OfType]; exists {
+			return graphql.NewList(objType)
+		}
+	case "Object":
+		if field.OfType == "" {
+			log.Fatalf("Object type must specify ofType")
+		}
+		if objType, exists := typeMap[field.OfType]; exists {
+			return objType
+		}
+	case "NonNull":
+		if field.OfType == "" {
+			log.Fatalf("NonNull type must specify ofType")
+		}
+		if basicType, exists := map[string]graphql.Type{
+			"Int":    graphql.Int,
+			"String": graphql.String,
+		}[field.OfType]; exists {
+			return graphql.NewNonNull(basicType)
+		}
+		if objType, exists := typeMap[field.OfType]; exists {
+			return graphql.NewNonNull(objType)
+		}
+	}
+	log.Fatalf("Unknown type: %s with ofType: %s", field.Type, field.OfType)
+	return nil
+}
 
-	formaPagamentoType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "FormaPagamento",
-		Fields: graphql.Fields{
-			"codigo":    &graphql.Field{Type: graphql.Int},
-			"descricao": &graphql.Field{Type: graphql.String},
-		},
-	})
+func CreateSchema(res Resolver, schemaPath string) (*graphql.Schema, error) {
+	// Carregar o arquivo JSON
+	data, err := ioutil.ReadFile(schemaPath)
+	if err != nil {
+		return nil, err
+	}
 
-	marcaConType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "MarcaCon",
-		Fields: graphql.Fields{
-			"valorComp": &graphql.Field{Type: graphql.Float},
-			"valorDae":  &graphql.Field{Type: graphql.Float},
-			"valorDisC": &graphql.Field{Type: graphql.Float},
-			"valorDisE": &graphql.Field{Type: graphql.Float},
-			"valorLimC": &graphql.Field{Type: graphql.Float},
-			"valorLiq":  &graphql.Field{Type: graphql.Float},
-			"valorMcb":  &graphql.Field{Type: graphql.Float},
-		},
-	})
+	var config SchemaConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
 
-	origemMcType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "OrigemMc",
-		Fields: graphql.Fields{
-			"fonte":           &graphql.Field{Type: graphql.String},
-			"dataAtualizacao": &graphql.Field{Type: graphql.String},
-		},
-	})
+	// Inicializar o mapa de tipos
+	typeMap = make(map[string]*graphql.Object)
 
-	mensagemProcessamentoType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "MensagemProcessamento",
-		Fields: graphql.Fields{
-			"codigos":   &graphql.Field{Type: graphql.String},
-			"descricao": &graphql.Field{Type: graphql.String},
-		},
-	})
+	// Criar tipos GraphQL
+	for _, typeDef := range config.Types {
+		fields := graphql.Fields{}
+		for _, field := range typeDef.Fields {
+			fields[field.Name] = &graphql.Field{
+				Type: getGraphQLType(field, typeMap),
+			}
+		}
+		typeMap[typeDef.Name] = graphql.NewObject(graphql.ObjectConfig{
+			Name:   typeDef.Name,
+			Fields: fields,
+		})
+	}
 
-	vinculoType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Vinculo",
-		Fields: graphql.Fields{
-			"codigoCons":                   &graphql.Field{Type: graphql.String},
-			"codigoMbf":                    &graphql.Field{Type: graphql.String},
-			"domicilioBancario":            &graphql.Field{Type: domicilioBancarioType},
-			"dataBb":                       &graphql.Field{Type: graphql.String},
-			"dataCm":                       &graphql.Field{Type: graphql.String},
-			"dataDb":                       &graphql.Field{Type: graphql.String},
-			"dataExtc":                     &graphql.Field{Type: graphql.String},
-			"dataNc":                       &graphql.Field{Type: graphql.String},
-			"dataTcB":                      &graphql.Field{Type: graphql.String},
-			"dataTrl":                      &graphql.Field{Type: graphql.String},
-			"dataUppc":                     &graphql.Field{Type: graphql.String},
-			"especieBeneficio":             &graphql.Field{Type: especieBeneficioType},
-			"formaPagamento":               &graphql.Field{Type: formaPagamentoType},
-			"codigoIdentificacaoInquilino": &graphql.Field{Type: graphql.String},
-			"codigoIdentificacaoRt":        &graphql.Field{Type: graphql.String},
-			"indicadorEb":                  &graphql.Field{Type: graphql.Boolean},
-			"indicadorEe":                  &graphql.Field{Type: graphql.Boolean},
-			"indicadorOr":                  &graphql.Field{Type: graphql.Boolean},
-			"indicadorPa":                  &graphql.Field{Type: formaPagamentoType},
-			"indicadorPep":                 &graphql.Field{Type: formaPagamentoType},
-			"indicadorPro":                 &graphql.Field{Type: graphql.Boolean},
-			"indicadorRt":                  &graphql.Field{Type: graphql.Boolean},
-			"indicadorRp":                  &graphql.Field{Type: graphql.Boolean},
-			"indicadorSben":                &graphql.Field{Type: formaPagamentoType},
-			"indicadorCj":                  &graphql.Field{Type: graphql.Boolean},
-			"marcaCon":                     &graphql.Field{Type: marcaConType},
-			"nomeDc":                       &graphql.Field{Type: graphql.String},
-			"origemMc":                     &graphql.Field{Type: graphql.NewList(origemMcType)},
-			"quantidadeEmAs":               &graphql.Field{Type: graphql.Int},
-			"quantidadeEma":                &graphql.Field{Type: graphql.Int},
-			"quantidadeEmp":                &graphql.Field{Type: graphql.Int},
-			"quantidadeEmr":                &graphql.Field{Type: graphql.Int},
-			"quantidadeEms":                &graphql.Field{Type: graphql.Int},
-			"quantidadePl":                 &graphql.Field{Type: graphql.Int},
-			"siglaUfp":                     &graphql.Field{Type: graphql.String},
-			"tipoBloq":                     &graphql.Field{Type: formaPagamentoType},
-			"tipoVinCol":                   &graphql.Field{Type: graphql.String},
-			"valorCbene":                   &graphql.Field{Type: graphql.Float},
-			"valorLib":                     &graphql.Field{Type: graphql.Float},
-			"mensagemProcessamento":        &graphql.Field{Type: mensagemProcessamentoType},
-		},
-	})
+	// Resolver dependências de tipos
+	for _, typeDef := range config.Types {
+		obj := typeMap[typeDef.Name]
+		for _, field := range typeDef.Fields {
+			obj.AddFieldConfig(field.Name, &graphql.Field{
+				Type: getGraphQLType(field, typeMap),
+			})
+		}
+	}
 
-	colaboradorConvenioType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "ColaboradorConvenio",
-		Fields: graphql.Fields{
-			"codigoIdentificacaoPessoa": &graphql.Field{Type: graphql.String},
-			"codigoConvenioContrato":    &graphql.Field{Type: graphql.String},
-			"vinculos":                  &graphql.Field{Type: graphql.NewList(vinculoType)},
-		},
-	})
-
-	combinedDataType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "CombinedData",
-		Fields: graphql.Fields{
-			"convenio":            &graphql.Field{Type: convenioType},
-			"limiteOperacional":   &graphql.Field{Type: limiteOperacionalType},
-			"taxaFunding":         &graphql.Field{Type: taxaFundingType},
-			"colaboradorConvenio": &graphql.Field{Type: colaboradorConvenioType},
-		},
-	})
+	// Criar o tipo Query
+	queryFields := graphql.Fields{}
+	for _, field := range config.Query.Fields {
+		args := graphql.FieldConfigArgument{}
+		for _, arg := range field.Args {
+			args[arg.Name] = &graphql.ArgumentConfig{
+				Type: getGraphQLType(FieldConfig{Type: arg.Type, OfType: arg.OfType}, typeMap),
+			}
+		}
+		queryFields[field.Name] = &graphql.Field{
+			Type: getGraphQLType(field, typeMap),
+			Args: args,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				// Mapear o campo para o resolver correspondente
+				if field.Name == "dataSources" {
+					return res.ResolveDataSource(p)
+				}
+				return nil, nil
+			},
+		}
+	}
 
 	queryType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "Query",
-		Fields: graphql.Fields{
-			"dataSources": &graphql.Field{
-				Type: combinedDataType,
-				Args: graphql.FieldConfigArgument{
-					"codigoConvenio": &graphql.ArgumentConfig{
-						Type: graphql.NewNonNull(graphql.Int),
-					},
-				},
-				Resolve: res.ResolveDataSource,
-			},
-		},
+		Name:   config.Query.Name,
+		Fields: queryFields,
 	})
 
+	// Criar o schema
 	schema, err := graphql.NewSchema(graphql.SchemaConfig{
 		Query: queryType,
 	})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return &schema, err
+	return &schema, nil
 }

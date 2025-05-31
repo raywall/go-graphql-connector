@@ -10,8 +10,18 @@ import (
 	"github.com/raywall/go-graphql-integrator/internal/middleware"
 )
 
+var (
+	schemaConfig     string = "./cmd/server/config/schema.json"
+	connectorsConfig string = "./cmd/server/config/connectors.json"
+)
+
 func main() {
-	schema, err := graph.CreateSchema(graph.NewResolver("localhost:6379", ""))
+	resolver, err := graph.NewResolver(connectorsConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	schema, err := graph.CreateSchema(resolver, schemaConfig)
 	if err != nil {
 		panic(err)
 	}

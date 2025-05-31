@@ -1,23 +1,47 @@
 package adapters
 
 import (
-	"time"
-
-	"github.com/raywall/go-graphql-integrator/internal/graph/models"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 )
 
-type APIClient struct {
-	// Add actual HTTP client configuration here
+type RestAdapter struct {
+	client   *http.Client
+	baseUrl  string
+	endpoint string
 }
 
-func NewAPIClient() *APIClient {
-	return &APIClient{}
+func NewRestAdapter(baseUrl, endpoint string) Adapter {
+	return &RestAdapter{
+		client:   &http.Client{},
+		baseUrl:  baseUrl,
+		endpoint: endpoint,
+	}
 }
 
-func (c *APIClient) GetColaboradorConvenio(codigoConvenio int) (*models.ColaboradorConvenio, error) {
-	time.Sleep(60 * time.Millisecond)
-	return &models.ColaboradorConvenio{
-		CodigoIdentificacaoPessoa: "COL_123",
-		// ... other fields
-	}, nil
+func (r *RestAdapter) GetData(key string) (map[string]interface{}, error) {
+	url := r.baseUrl + strings.Replace(r.endpoint, "{codigoConvenio}", key, 1)
+	resp, err := r.client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from REST API %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("REST API returned status %d for %s", resp.StatusCode, url)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read REST API response: %v", err)
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return nil, fmt.Errorf("failed to decode REST API response: %v", err)
+	}
+	return data, nil
 }

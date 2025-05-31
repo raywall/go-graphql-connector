@@ -1,13 +1,14 @@
 package graph
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/graphql-go/graphql"
-	"github.com/raywall/go-graphql-integrator/internal/adapters"
-	"github.com/raywall/go-graphql-integrator/internal/graph/models"
+	"github.com/graphql-go/graphql/language/ast"
+	"github.com/raywall/go-graphql-integrator/internal/graph/connectors"
 )
 
 type Resolver interface {
@@ -15,22 +16,20 @@ type Resolver interface {
 }
 
 type resolver struct {
-	redisAdapter adapters.RedisAdapter
-	apiClient    *adapters.APIClient
+	dataConnectors map[string]connectors.Connector
+	// apiClient      *adapters.APIClient
 }
 
-type Result struct {
-	Convenio            models.Convenio            `json:"convenio"`
-	LimiteOperacional   models.LimiteOperacional   `json:"limiteOperacional"`
-	TaxaFunding         models.TaxaFunding         `json:"taxaFunding"`
-	ColaboradorConvenio models.ColaboradorConvenio `json:"colaboradorConvenio"`
-}
-
-func NewResolver(endpoint, pass string) Resolver {
-	return &resolver{
-		redisAdapter: adapters.NewRedisAdapter(endpoint, pass),
-		apiClient:    adapters.NewAPIClient(),
+func NewResolver(configFile string) (Resolver, error) {
+	connectors, err := connectors.LoadConnectors(configFile)
+	if err != nil {
+		return nil, err
 	}
+
+	return &resolver{
+		dataConnectors: connectors,
+		// apiClient:      adapters.NewAPIClient(),
+	}, nil
 }
 
 func (r *resolver) ResolveDataSource(p graphql.ResolveParams) (interface{}, error) {
@@ -40,49 +39,70 @@ func (r *resolver) ResolveDataSource(p graphql.ResolveParams) (interface{}, erro
 	}
 
 	var (
-		conv models.Convenio
-		lim  models.LimiteOperacional
-		tax  models.TaxaFunding
-		col  models.ColaboradorConvenio
-
-		errConv, errLim, errTax, errCol error
-		wg                              sync.WaitGroup
+		result          = make(map[string]interface{})
+		requestedFields = getRequestedFields(p.Info)
+		errChan         = make(chan error, len(requestedFields))
+		wg              sync.WaitGroup
 	)
 
-	wg.Add(3)
+	// Context for timeout/cancellation control
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	go func() {
-		defer wg.Done()
-		conv, errConv = r.redisAdapter.GetConvenio(codigo)
-	}()
+	for _, field := range requestedFields {
+		conn, exists := r.dataConnectors[field]
+		if !exists {
+			errChan <- fmt.Errorf("no connector found for field: %s", field)
+			continue
+		}
 
-	go func() {
-		defer wg.Done()
-		lim, errLim = r.redisAdapter.GetLimiteOperacional(codigo)
-	}()
-
-	go func() {
-		defer wg.Done()
-		tax, errTax = r.redisAdapter.GetTaxaFunding(codigo)
-	}()
-
-	// go func() {
-	// 	defer wg.Done()
-	// 	col, errCol = r.apiClient.GetColaboradorConvenio(codigo)
-	// }()
-
-	wg.Wait()
-
-	if err := errors.Join(errConv, errLim, errTax, errCol); err != nil {
-		return nil, fmt.Errorf("error fetching data: %w", err)
+		wg.Add(1)
+		go func(field string, conn connectors.Connector) {
+			defer wg.Done()
+			data, err := conn.GetData(codigo)
+			if err != nil {
+				select {
+				case errChan <- fmt.Errorf("error fetching %s: %w", field, err):
+				case <-ctx.Done():
+					return
+				}
+				return
+			}
+			result[field] = data
+		}(field, conn)
 	}
 
-	result := Result{
-		Convenio:            conv,
-		LimiteOperacional:   lim,
-		TaxaFunding:         tax,
-		ColaboradorConvenio: col,
+	wg.Wait()
+	close(errChan)
+
+	var combinedErr error
+	for err := range errChan {
+		combinedErr = errors.Join(combinedErr, err)
+	}
+	if combinedErr != nil {
+		return nil, fmt.Errorf("error fetching data: %w", combinedErr)
 	}
 
 	return result, nil
+}
+
+func getRequestedFields(info graphql.ResolveInfo) []string {
+	fields := make([]string, 0)
+
+	if len(info.FieldASTs) == 0 {
+		return fields
+	}
+
+	if info.FieldASTs[0].SelectionSet == nil {
+		return fields
+	}
+
+	for _, selection := range info.FieldASTs[0].SelectionSet.Selections {
+		switch sel := selection.(type) {
+		case *ast.Field:
+			fields = append(fields, sel.Name.Value)
+		}
+	}
+
+	return fields
 }
