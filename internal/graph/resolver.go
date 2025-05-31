@@ -20,8 +20,8 @@ type resolver struct {
 	// apiClient      *adapters.APIClient
 }
 
-func NewResolver(configFile string) (Resolver, error) {
-	connectors, err := connectors.LoadConnectors(configFile)
+func NewResolver(connectorConfig string) (Resolver, error) {
+	connectors, err := connectors.LoadConnectors(connectorConfig)
 	if err != nil {
 		return nil, err
 	}

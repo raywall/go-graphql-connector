@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: GraphQL API with ALB and Lambda
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for the ALB
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs for the ALB (at least two)
+  CertificateArn:
+    Type: String
+    Description: ARN of the ACM certificate for HTTPS
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name (e.g., dev, prod)
+
+Resources:
+  # Lambda Function
+  GraphQLFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: main
+      Runtime: go1.x
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentName
+          SSM_SCHEMA: /graphql/dev/schema
+          SSM_CONNECTORS: /graphql/dev/connectors
+          REDIS_URL: redis:6379
+      Policies:
+      - AWSLambdaBasicExecutionRole
+      - Statement:
+        - Effect: Allow
+          Action:
+          - s3:GetObject
+          - ssm:GetParameter
+          - ssm:DescribeParameter
+          - ssm:DescribeParameters
+          - dynamodb:GetItem
+          Resource: '*'
+      Events:
+        ALBEvent:
+          Type: HttpApi
+          Properties:
+            Path: /graphql
+            Method: ANY
+            TimeoutInMillis: 29000
+      VpcConfig:
+        SubnetIds: !Ref SubnetIds
+        SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+
+  # Application Load Balancer
+  GraphQLALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub graphql-alb-${EnvironmentName}
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+      - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      Tags:
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+  # ALB Listener (HTTPS)
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref GraphQLALB
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+      - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref GraphQLTargetGroup
+
+  # Target Group for Lambda
+  GraphQLTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub graphql-tg-${EnvironmentName}
+      TargetType: lambda
+      Targets:
+      - Id: !GetAtt GraphQLFunction.Arn
+      HealthCheckEnabled: false # Lambda does not support health checks
+      Tags:
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+  # Listener Rule for /graphql
+  GraphQLListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 1
+      Conditions:
+      - Field: path-pattern
+        Values:
+        - /graphql
+      Actions:
+      - Type: forward
+        TargetGroupArn: !Ref GraphQLTargetGroup
+
+  # Permission for ALB to invoke Lambda
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GraphQLFunction
+      Action: lambda:InvokeFunction
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceArn: !Ref GraphQLTargetGroup
+
+  # Security Group for ALB
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for GraphQL ALB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+  # Security Group for Lambda
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for GraphQL Lambda
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+Outputs:
+  ALBEndpoint:
+    Description: Endpoint URL for the GraphQL ALB
+    Value: !Sub https://${GraphQLALB.DNSName}/graphql

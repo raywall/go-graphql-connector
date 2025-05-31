@@ -2,7 +2,6 @@ package graph
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 
 	"github.com/graphql-go/graphql"
@@ -86,15 +85,9 @@ func getGraphQLType(field FieldConfig, typeMap map[string]*graphql.Object) graph
 	return nil
 }
 
-func CreateSchema(res Resolver, schemaPath string) (*graphql.Schema, error) {
-	// Carregar o arquivo JSON
-	data, err := ioutil.ReadFile(schemaPath)
-	if err != nil {
-		return nil, err
-	}
-
+func CreateSchema(res Resolver, schemaConfig string) (*graphql.Schema, error) {
 	var config SchemaConfig
-	if err := json.Unmarshal(data, &config); err != nil {
+	if err := json.Unmarshal([]byte(schemaConfig), &config); err != nil {
 		return nil, err
 	}
 

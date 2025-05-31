@@ -3,7 +3,6 @@ package connectors
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/raywall/go-graphql-integrator/internal/adapters"
@@ -71,14 +70,9 @@ func (c *connector) GetData(codigoConvenio int) (map[string]interface{}, error) 
 	return c.adapter.GetData(key)
 }
 
-func LoadConnectors(configFile string) (map[string]Connector, error) {
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading connectors config: %v", err)
-	}
-
+func LoadConnectors(connectorConfig string) (map[string]Connector, error) {
 	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
+	if err := json.Unmarshal([]byte(connectorConfig), &config); err != nil {
 		return nil, fmt.Errorf("error parsing connectors config: %v", err)
 	}
 
