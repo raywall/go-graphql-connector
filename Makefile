@@ -10,6 +10,7 @@ localstack:
 
 	@if [ ! -f config/schema.json ]; then echo "Error: config/schema.json not found"; exit 1; fi
 	@if [ ! -f config/connectors.json ]; then echo "Error: config/connectors.json not found"; exit 1; fi
+	@if [ ! -f config/credentials.json ]; then echo "Error: config/credentials.json not found"; exit 1; fi
 	aws --endpoint-url=http://localhost:4566 ssm put-parameter \
 		--name "/graphql/dev/schema" \
 		--type String \
@@ -22,6 +23,10 @@ localstack:
 		--value "$$(cat config/connectors.json)" \
 		--region us-east-1 \
 		--overwrite
+	aws --endpoint-url=http://localhost:4566 secretsmanager create-secret \
+		--name "/graphql/dev/credentials" \
+		--secret-string "$$(cat config/credentials.json)" \
+		--region us-east-1
 
 # Run locally
 local:
@@ -34,6 +39,16 @@ run:
 		--region us-east-1 \
 		--docker-network local-kafka-broker_default \
 		--warm-containers eager
+
+# Mock values locally with LocalStack SSM
+mock:
+	@if [ ! -f config/mock.json ]; then echo "Error: config/mock.json not found"; exit 1; fi
+	aws --endpoint-url=http://localhost:4566 ssm put-parameter \
+		--name "/graphql/dev/mock" \
+		--type String \
+		--value "$$(cat config/mock.json)" \
+		--region us-east-1 \
+		--overwrite
 
 # Clean up
 clean:

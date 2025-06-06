@@ -83,8 +83,8 @@ github.com/onsi/gomega v1.27.7/go.mod h1:1p8OOlwo2iUUDsHnOrjE5UKYJ+e3W8eQ3qSlRah
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/raywall/cloud-easy-connector v0.1.13 h1:z5iNbqcj76/uct07ylZ+wazradhiOOOxqU8r0QhLN4k=
-github.com/raywall/cloud-easy-connector v0.1.13/go.mod h1:GFwbHf5p0IujS+42ImaMFdwDwwnyhUuY3Yhjq8BClNc=
+github.com/raywall/cloud-easy-connector v0.1.14 h1:wZDzp2sderJS5n+gT9HR440E6wKsm2Ed/G5bSw+l4Sg=
+github.com/raywall/cloud-easy-connector v0.1.14/go.mod h1:GFwbHf5p0IujS+42ImaMFdwDwwnyhUuY3Yhjq8BClNc=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

@@ -13,7 +13,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/graphql-go/graphql v0.8.1
 	github.com/graphql-go/handler v0.2.4
-	github.com/raywall/cloud-easy-connector v0.1.13
+	github.com/raywall/cloud-easy-connector v0.1.14
 )
 
 require (
