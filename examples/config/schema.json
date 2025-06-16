@@ -1,0 +1,519 @@
+{
+  "types": [
+    {
+      "name": "PossibilidadeHabilitacao",
+      "fields": [
+        {
+          "name": "plataformas",
+          "type": "List",
+          "ofType": "String"
+        },
+        {
+          "name": "modalidades",
+          "type": "List",
+          "ofType": "String"
+        },
+        {
+          "name": "canais",
+          "type": "List",
+          "ofType": "String"
+        }
+      ]
+    },
+    {
+      "name": "Convenio",
+      "fields": [
+        {
+          "name": "codigoConvenio",
+          "type": "Int"
+        },
+        {
+          "name": "nomeConvenio",
+          "type": "String"
+        },
+        {
+          "name": "apelidoConvenio",
+          "type": "String"
+        },
+        {
+          "name": "codigoFq3PessoaJuridica",
+          "type": "String"
+        },
+        {
+          "name": "codigoTq3InquilinoPessoaJuridica",
+          "type": "String"
+        },
+        {
+          "name": "grupoConsignacao",
+          "type": "String"
+        },
+        {
+          "name": "numeroContratoMae",
+          "type": "String"
+        },
+        {
+          "name": "instituicaoFinanceira",
+          "type": "String"
+        },
+        {
+          "name": "segmento",
+          "type": "String"
+        },
+        {
+          "name": "situacaoConvenio",
+          "type": "String"
+        },
+        {
+          "name": "possibilidadeHabilitacao",
+          "type": "Object",
+          "ofType": "PossibilidadeHabilitacao"
+        }
+      ]
+    },
+    {
+      "name": "LimiteOperacional",
+      "fields": [
+        {
+          "name": "percentualMaximoMargemConsignavel",
+          "type": "Float"
+        },
+        {
+          "name": "percentualMaximoMargemConsignavelRestricao",
+          "type": "Float"
+        },
+        {
+          "name": "tipoMargemConsignavelRestricao",
+          "type": "String"
+        },
+        {
+          "name": "tipoTaxaMaximaRegulada",
+          "type": "String"
+        },
+        {
+          "name": "percentualTaxaMaximaRegulada",
+          "type": "Float"
+        },
+        {
+          "name": "quantidadeMinimaPrazo",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeMaximaPrazo",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeMaximaContratacoes",
+          "type": "Int"
+        },
+        {
+          "name": "valorMinimoContratacao",
+          "type": "Float"
+        },
+        {
+          "name": "valorMaximoContratacao",
+          "type": "Float"
+        },
+        {
+          "name": "valorMinimoParcela",
+          "type": "Float"
+        },
+        {
+          "name": "idadeMinimaContratacao",
+          "type": "Int"
+        },
+        {
+          "name": "idadeMaximaContratacao",
+          "type": "Int"
+        },
+        {
+          "name": "valorMinimoTroco",
+          "type": "Float"
+        },
+        {
+          "name": "quantidadeMaximaDiasAtraso",
+          "type": "Int"
+        },
+        {
+          "name": "percentualMinimoSaldoDevedorQuitado",
+          "type": "Float"
+        },
+        {
+          "name": "quantidadeMinimaParcelasPagas",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeMaximaParcelasAtraso",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeMaximaContratosRefinanciadosPorVez",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeMinimaParcelasVencer",
+          "type": "Int"
+        }
+      ]
+    },
+    {
+      "name": "PrazoFunding",
+      "fields": [
+        {
+          "name": "prazo",
+          "type": "Int"
+        },
+        {
+          "name": "taxaFunding",
+          "type": "Float"
+        }
+      ]
+    },
+    {
+      "name": "TaxaFunding",
+      "fields": [
+        {
+          "name": "dataFunding",
+          "type": "String"
+        },
+        {
+          "name": "prazos",
+          "type": "List",
+          "ofType": "PrazoFunding"
+        }
+      ]
+    },
+    {
+      "name": "DomicilioBancario",
+      "fields": [
+        {
+          "name": "codigoAgencia",
+          "type": "String"
+        },
+        {
+          "name": "codigoBanco",
+          "type": "Int"
+        },
+        {
+          "name": "numeroConta",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "EspecieBeneficio",
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "Int"
+        },
+        {
+          "name": "descricao",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "FormaPagamento",
+      "fields": [
+        {
+          "name": "codigo",
+          "type": "Int"
+        },
+        {
+          "name": "descricao",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "MarcaCon",
+      "fields": [
+        {
+          "name": "valorComp",
+          "type": "Float"
+        },
+        {
+          "name": "valorDae",
+          "type": "Float"
+        },
+        {
+          "name": "valorDisC",
+          "type": "Float"
+        },
+        {
+          "name": "valorDisE",
+          "type": "Float"
+        },
+        {
+          "name": "valorLimC",
+          "type": "Float"
+        },
+        {
+          "name": "valorLiq",
+          "type": "Float"
+        },
+        {
+          "name": "valorMcb",
+          "type": "Float"
+        }
+      ]
+    },
+    {
+      "name": "OrigemMc",
+      "fields": [
+        {
+          "name": "fonte",
+          "type": "String"
+        },
+        {
+          "name": "dataAtualizacao",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "MensagemProcessamento",
+      "fields": [
+        {
+          "name": "codigos",
+          "type": "String"
+        },
+        {
+          "name": "descricao",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "Vinculo",
+      "fields": [
+        {
+          "name": "codigoCons",
+          "type": "String"
+        },
+        {
+          "name": "codigoMbf",
+          "type": "String"
+        },
+        {
+          "name": "domicilioBancario",
+          "type": "Object",
+          "ofType": "DomicilioBancario"
+        },
+        {
+          "name": "dataBb",
+          "type": "String"
+        },
+        {
+          "name": "dataCm",
+          "type": "String"
+        },
+        {
+          "name": "dataDb",
+          "type": "String"
+        },
+        {
+          "name": "dataExtc",
+          "type": "String"
+        },
+        {
+          "name": "dataNc",
+          "type": "String"
+        },
+        {
+          "name": "dataTcB",
+          "type": "String"
+        },
+        {
+          "name": "dataTrl",
+          "type": "String"
+        },
+        {
+          "name": "dataUppc",
+          "type": "String"
+        },
+        {
+          "name": "especieBeneficio",
+          "type": "Object",
+          "ofType": "EspecieBeneficio"
+        },
+        {
+          "name": "formaPagamento",
+          "type": "Object",
+          "ofType": "FormaPagamento"
+        },
+        {
+          "name": "codigoIdentificacaoInquilino",
+          "type": "String"
+        },
+        {
+          "name": "codigoIdentificacaoRt",
+          "type": "String"
+        },
+        {
+          "name": "indicadorEb",
+          "type": "Boolean"
+        },
+        {
+          "name": "indicadorEe",
+          "type": "Boolean"
+        },
+        {
+          "name": "indicadorOr",
+          "type": "Boolean"
+        },
+        {
+          "name": "indicadorPa",
+          "type": "Object",
+          "ofType": "FormaPagamento"
+        },
+        {
+          "name": "indicadorPep",
+          "type": "Object",
+          "ofType": "FormaPagamento"
+        },
+        {
+          "name": "indicadorPro",
+          "type": "Boolean"
+        },
+        {
+          "name": "indicadorRt",
+          "type": "Boolean"
+        },
+        {
+          "name": "indicadorSben",
+          "type": "Object",
+          "ofType": "FormaPagamento"
+        },
+        {
+          "name": "indicadorCj",
+          "type": "Boolean"
+        },
+        {
+          "name": "marcaCon",
+          "type": "Object",
+          "ofType": "MarcaCon"
+        },
+        {
+          "name": "nomeDc",
+          "type": "String"
+        },
+        {
+          "name": "origemMc",
+          "type": "List",
+          "ofType": "OrigemMc"
+        },
+        {
+          "name": "quantidadeEmAs",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeEma",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeEmp",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeEmr",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadeEms",
+          "type": "Int"
+        },
+        {
+          "name": "quantidadePl",
+          "type": "Int"
+        },
+        {
+          "name": "siglaUfp",
+          "type": "String"
+        },
+        {
+          "name": "tipoBloq",
+          "type": "Object",
+          "ofType": "FormaPagamento"
+        },
+        {
+          "name": "tipoVinCol",
+          "type": "String"
+        },
+        {
+          "name": "valorCbene",
+          "type": "Float"
+        },
+        {
+          "name": "valorLib",
+          "type": "Float"
+        },
+        {
+          "name": "mensagemProcessamento",
+          "type": "Object",
+          "ofType": "MensagemProcessamento"
+        }
+      ]
+    },
+    {
+      "name": "ColaboradorConvenio",
+      "fields": [
+        {
+          "name": "codigoIdentificacaoPessoa",
+          "type": "String"
+        },
+        {
+          "name": "codigoConvenioContrato",
+          "type": "String"
+        },
+        {
+          "name": "vinculos",
+          "type": "List",
+          "ofType": "Vinculo"
+        }
+      ]
+    },
+    {
+      "name": "CombinedData",
+      "fields": [
+        {
+          "name": "convenio",
+          "type": "Object",
+          "ofType": "Convenio"
+        },
+        {
+          "name": "limiteOperacional",
+          "type": "Object",
+          "ofType": "LimiteOperacional"
+        },
+        {
+          "name": "taxaFunding",
+          "type": "Object",
+          "ofType": "TaxaFunding"
+        },
+        {
+          "name": "colaboradorConvenio",
+          "type": "Object",
+          "ofType": "ColaboradorConvenio"
+        }
+      ]
+    }
+  ],
+  "query": {
+    "name": "Query",
+    "fields": [
+      {
+        "name": "dataSources",
+        "type": "Object",
+        "ofType": "CombinedData",
+        "args": [
+          {
+            "name": "codigoConvenio",
+            "type": "NonNull",
+            "ofType": "Int"
+          }
+        ]
+      }
+    ]
+  }
+}

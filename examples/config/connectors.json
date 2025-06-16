@@ -1,0 +1,31 @@
+{
+    "connectors": [
+        {
+            "field": "convenio",
+            "adapter": "redis",
+            "adapterConfig": {
+                "endpoint": "localhost:6379",
+                "password": ""
+            },
+            "keyPattern": "CVN_{codigoConvenio}"
+        },
+        {
+            "field": "limiteOperacional",
+            "adapter": "redis",
+            "adapterConfig": {
+                "endpoint": "localhost:6379",
+                "password": ""
+            },
+            "keyPattern": "LMT_{codigoConvenio}"
+        },
+        {
+            "field": "taxaFunding",
+            "adapter": "redis",
+            "adapterConfig": {
+                "endpoint": "localhost:6379",
+                "password": ""
+            },
+            "keyPattern": "FDN_{codigoConvenio}"
+        }
+    ]
+}
