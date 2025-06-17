@@ -1,4 +1,4 @@
-module github.com/raywall/go-graphql-integrator
+module github.com/raywall/go-graphql-connector
 
 go 1.24.1
 

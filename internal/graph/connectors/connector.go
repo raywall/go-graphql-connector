@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/raywall/go-graphql-integrator/internal/adapters"
+	"github.com/raywall/go-graphql-connector/internal/adapters"
 )
 
 type ConnectorConfig struct {

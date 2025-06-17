@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +8,7 @@ import (
 
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/language/ast"
-	"github.com/raywall/go-graphql-integrator/internal/graph/connectors"
+	"github.com/raywall/go-graphql-connector/internal/graph/connectors"
 
 	"github.com/raywall/cloud-easy-connector/pkg/cloud"
 	"github.com/raywall/cloud-easy-connector/pkg/local"
@@ -74,8 +73,8 @@ func (r *resolver) ResolveDataSource(p graphql.ResolveParams) (interface{}, erro
 	)
 
 	// Context for timeout/cancellation control
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// ctx, cancel := context.WithCancel(context.Background())
+	// defer cancel()
 
 	for _, field := range requestedFields {
 		conn, exists := r.dataConnectors[field]
@@ -96,12 +95,13 @@ func (r *resolver) ResolveDataSource(p graphql.ResolveParams) (interface{}, erro
 			defer wg.Done()
 			data, err := conn.GetData(codigo)
 			if err != nil {
-				select {
-				case errChan <- fmt.Errorf("error fetching %s: \n\t%w", field, err):
-				case <-ctx.Done():
-					return
-				}
-				return
+				result[field] = nil
+				// select {
+				// case errChan <- fmt.Errorf("error fetching %s: \n\t%w", field, err):
+				// case <-ctx.Done():
+				// 	return
+				// }
+				// return
 			}
 			result[field] = data
 		}(field, conn)
