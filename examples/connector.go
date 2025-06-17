@@ -22,7 +22,6 @@ var (
 	adapter        *httpadapter.HandlerAdapterALB
 	wrappedHandler http.Handler
 	err            error
-	config         *graphql.Config
 	api            *graphql.GraphQL
 )
 
@@ -32,7 +31,7 @@ func init() {
 		cloud.SecretsManagerContext,
 	}
 
-	config = &graphql.Config{
+	config := &graphql.Config{
 		Schema:     "ssm:/graphql/dev/schema",
 		Connectors: "ssm:/graphql/dev/connectors:false",
 		Route:      "/graphql",
@@ -54,22 +53,10 @@ func init() {
 	}
 
 	// Configurar o handler GraphQL
-	h := handler.New(
-		&handler.Config{
-			Schema:   api.Schema,
-			Pretty:   true,
-			GraphiQL: true,
-		})
-
-	// Aplicar middleware chain
-	wrappedHandler = middleware.Chain(
-		h,
-		// middleware.Logging,
-		// middleware.Tracing,
-	)
+	wrappedHandler = api.NewHandler(true)
 
 	// Adaptar o handler para Lambda
-	adapter = httpadapter.NewALB(wrappedHandler)
+	adapter = graphql.Handler(wrappedHandler).ToALB()
 }
 
 func requestHandler(ctx context.Context, req events.ALBTargetGroupRequest) (events.ALBTargetGroupResponse, error) {
@@ -85,7 +72,7 @@ func requestHandler(ctx context.Context, req events.ALBTargetGroupRequest) (even
 			},
 		}, nil
 
-	} else if path != config.Route && method != http.MethodPost {
+	} else if path != api.Config.Route && method != http.MethodPost {
 		return events.ALBTargetGroupResponse{
 			StatusCode: 404,
 			Body:       `{"message": "rota não encontrada ou método não permitido"}`,
@@ -102,8 +89,8 @@ func main() {
 	if _, ok := os.LookupEnv("ENVIRONMENT"); ok {
 		lambda.Start(requestHandler)
 	} else {
-		http.Handle(config.Route, wrappedHandler)
-		fmt.Println("Server running at http://localhost:8080/graphql")
+		http.Handle(api.Config.Route, wrappedHandler)
+		fmt.Printf("Server running at http://localhost:8080%s\n", config.Route)
 		log.Fatal(http.ListenAndServe(":8080", nil))
 	}
 }
