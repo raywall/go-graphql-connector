@@ -30,6 +30,10 @@ func New(config *Config, resources *cloud.CloudContextList, region, endpoint str
 	if config.Route == "" {
 		config.Route = route
 	}
+	if !config.Pretty {
+		config.Pretty = true
+	}
+	api.Config = *config
 
 	// cloud context
 	if region == "" {
@@ -47,9 +51,21 @@ func New(config *Config, resources *cloud.CloudContextList, region, endpoint str
 		return nil, fmt.Errorf("failed to get the connections config: %v", err)
 	}
 
-	res, err := graph.NewResolver(connectionsConfig)
+	res, err := graph.NewResolverWithOptions(connectionsConfig, graph.ResolverOptions{
+		AllowPartial: config.AllowPartial,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a resolver: %v", err)
+	}
+	if err := res.AddCloudContext(config.CloudContext); err != nil {
+		return nil, fmt.Errorf("failed to add cloud context to resolver: %v", err)
+	}
+	if mockConfig, err := config.GetMockValue(); err != nil {
+		return nil, err
+	} else if mockConfig != "" {
+		if err := res.AddMockConfig(mockConfig); err != nil {
+			return nil, err
+		}
 	}
 	api.Resolver = &res
 

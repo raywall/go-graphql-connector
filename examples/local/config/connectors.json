@@ -7,7 +7,9 @@
                 "endpoint": "localhost:6379",
                 "password": ""
             },
-            "keyPattern": "CVN_{codigoConvenio}"
+            "keyPattern": "CVN_{codigoConvenio}",
+            "timeoutMs": 500,
+            "retries": 1
         },
         {
             "field": "limiteOperacional",
@@ -16,7 +18,9 @@
                 "endpoint": "localhost:6379",
                 "password": ""
             },
-            "keyPattern": "LMT_{codigoConvenio}"
+            "keyPattern": "LMT_{codigoConvenio}",
+            "timeoutMs": 500,
+            "retries": 1
         },
         {
             "field": "taxaFunding",
@@ -25,7 +29,10 @@
                 "endpoint": "localhost:6379",
                 "password": ""
             },
-            "keyPattern": "FDN_{codigoConvenio}"
+            "keyPattern": "FDN_{codigoConvenio}",
+            "timeoutMs": 500,
+            "retries": 1,
+            "optional": true
         }
     ]
 }

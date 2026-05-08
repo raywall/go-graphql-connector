@@ -1,0 +1,66 @@
+{
+  "types": [
+    {
+      "name": "Convenio",
+      "fields": [
+        {
+          "name": "codigoConvenio",
+          "type": "Int"
+        },
+        {
+          "name": "nomeConvenio",
+          "type": "String"
+        },
+        {
+          "name": "origem",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "LimiteOperacional",
+      "fields": [
+        {
+          "name": "percentualMaximoMargemConsignavel",
+          "type": "Float"
+        },
+        {
+          "name": "origem",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "CombinedData",
+      "fields": [
+        {
+          "name": "convenio",
+          "type": "Object",
+          "ofType": "Convenio"
+        },
+        {
+          "name": "limiteOperacional",
+          "type": "Object",
+          "ofType": "LimiteOperacional"
+        }
+      ]
+    }
+  ],
+  "query": {
+    "name": "Query",
+    "fields": [
+      {
+        "name": "dataSources",
+        "type": "Object",
+        "ofType": "CombinedData",
+        "args": [
+          {
+            "name": "codigoConvenio",
+            "type": "NonNull",
+            "ofType": "Int"
+          }
+        ]
+      }
+    ]
+  }
+}

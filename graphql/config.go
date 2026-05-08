@@ -1,7 +1,11 @@
 package graphql
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/raywall/cloud-easy-connector/pkg/cloud"
 )
@@ -44,14 +48,69 @@ type Config struct {
 	// be created dynamically
 	Connectors string `json:"connectors"`
 
+	// Mock is optional content or path to retrieve mocked resolver values.
+	Mock string `json:"mock,omitempty"`
+
 	// Route represents the route that will be used by the GraphQL API (e.g. /graphql)
 	Route string `json:"route"`
 
+	// Pretty enables pretty GraphQL responses.
+	Pretty bool `json:"pretty"`
+
+	// GraphiQL enables the GraphiQL web interface.
+	GraphiQL bool `json:"graphiql"`
+
+	// AllowPartial allows connector failures to return nil fields instead of failing the whole query.
+	AllowPartial bool `json:"allow_partial"`
+
 	// Authorization contains the authorization settings to be used by GraphQL API connectors
-	Authorization Authorization
+	Authorization Authorization `json:"authorization"`
 
 	// CloudContext is the cloud context that will be used to interact with available cloud resources
 	CloudContext cloud.CloudContext
+}
+
+func LoadConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse GraphQL config: %v", err)
+	}
+	config.resolveLocalPaths(filepath.Dir(path))
+
+	return &config, config.Validate()
+}
+
+func (c *Config) Validate() error {
+	if c.Schema == "" {
+		return fmt.Errorf("it's necessary to specify the GraphQL API schema")
+	}
+	if c.Connectors == "" {
+		return fmt.Errorf("it's necessary to specify the GraphQL API connections")
+	}
+	return nil
+}
+
+func (c *Config) resolveLocalPaths(baseDir string) {
+	c.Schema = resolveLocalPath(baseDir, c.Schema)
+	c.Connectors = resolveLocalPath(baseDir, c.Connectors)
+	c.Mock = resolveLocalPath(baseDir, c.Mock)
+}
+
+func resolveLocalPath(baseDir, value string) string {
+	const prefix = "local:"
+	if !strings.HasPrefix(value, prefix) {
+		return value
+	}
+	path := strings.TrimPrefix(value, prefix)
+	if filepath.IsAbs(path) || baseDir == "." || baseDir == "" {
+		return value
+	}
+	return prefix + filepath.Join(baseDir, path)
 }
 
 // GetSchemaValue is the method responsible for retrieving the schema settings from the GraphQL API
@@ -86,6 +145,22 @@ func (c *Config) GetConnectorsValue() (string, error) {
 	}
 
 	return c.Connectors, nil
+}
+
+func (c *Config) GetMockValue() (string, error) {
+	if c.Mock == "" {
+		return "", nil
+	}
+
+	if IsPath(c.Mock) {
+		value, err := FromString(c.Mock).GetValue(c.CloudContext)
+		if err != nil {
+			return "", fmt.Errorf("failed to get the mock value: %v", err)
+		}
+		return value.(string), nil
+	}
+
+	return c.Mock, nil
 }
 
 func (c *Config) GetTokenServiceURL() (string, error) {

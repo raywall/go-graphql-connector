@@ -1,0 +1,38 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: go-graphql-connector-elasticache-redis
+    ports:
+      - "6379:6379"
+
+  api:
+    image: python:3.12-alpine
+    container_name: go-graphql-connector-api
+    command: python /app/server.py
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./scripts/dynamodb-api:/app:ro
+
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: go-graphql-connector-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb,elasticache
+      - REDIS_CONTAINER_MODE=1
+      - USE_LOCALSTACK_ELASTICACHE=${USE_LOCALSTACK_ELASTICACHE:-false}
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - DEBUG=0
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
+    volumes:
+      - ./scripts/localstack/init:/etc/localstack/init/ready.d:ro
+      - ./examples/dynamodb/config:/opt/go-graphql-connector/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - localstack-data:/var/lib/localstack
+
+volumes:
+  localstack-data:

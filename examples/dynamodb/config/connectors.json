@@ -1,0 +1,29 @@
+{
+  "connectors": [
+    {
+      "field": "convenio",
+      "adapter": "redis",
+      "adapterConfig": {
+        "endpoint": "localhost.localstack.cloud:4510",
+        "password": ""
+      },
+      "keyPattern": "CVN_{codigoConvenio}",
+      "timeoutMs": 500,
+      "retries": 1
+    },
+    {
+      "field": "limiteOperacional",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "http://localhost:8090",
+        "endpoint": "/limites/{codigoConvenio}",
+        "method": "GET",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "timeoutMs": 1000,
+      "retries": 1
+    }
+  ]
+}

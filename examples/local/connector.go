@@ -11,11 +11,9 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
-	"github.com/graphql-go/handler"
 
 	"github.com/raywall/cloud-easy-connector/pkg/cloud"
 	"github.com/raywall/go-graphql-connector/graphql"
-	"github.com/raywall/go-graphql-connector/internal/middleware"
 )
 
 var (
@@ -23,6 +21,7 @@ var (
 	wrappedHandler http.Handler
 	err            error
 	api            *graphql.GraphQL
+	config         *graphql.Config
 )
 
 func init() {
@@ -31,20 +30,12 @@ func init() {
 		cloud.SecretsManagerContext,
 	}
 
-	config := &graphql.Config{
-		Schema:     "ssm:/graphql/dev/schema",
-		Connectors: "ssm:/graphql/dev/connectors:false",
-		Route:      "/graphql",
-		Authorization: graphql.Authorization{
-			RequireTokenSTS: true,
-			TokenService: graphql.TokenService{
-				TokenAuthorizationURL: "https://sts.teste.net/api/oauth/token",
-				Credentials: graphql.Credentials{
-					ClientID:     "env:STS_CLIENT_ID",
-					ClientSecret: "secrets:/graphql/dev/credentials:json",
-				},
-			},
-		},
+	config, err = graphql.LoadConfig("examples/local/config/service.json")
+	if err != nil {
+		config, err = graphql.LoadConfig("config/service.json")
+	}
+	if err != nil {
+		panic(err)
 	}
 
 	api, err = graphql.New(config, resources, "us-east-1", "http://localhost:4566")
@@ -53,10 +44,10 @@ func init() {
 	}
 
 	// Configurar o handler GraphQL
-	wrappedHandler = api.NewHandler(true)
+	wrappedHandler = api.NewHandler(config.Pretty)
 
 	// Adaptar o handler para Lambda
-	adapter = graphql.Handler(wrappedHandler).ToALB()
+	adapter = graphql.WrapHandler(wrappedHandler).ToALB()
 }
 
 func requestHandler(ctx context.Context, req events.ALBTargetGroupRequest) (events.ALBTargetGroupResponse, error) {
@@ -72,7 +63,7 @@ func requestHandler(ctx context.Context, req events.ALBTargetGroupRequest) (even
 			},
 		}, nil
 
-	} else if path != api.Config.Route && method != http.MethodPost {
+	} else if path != api.Config.Route || method != http.MethodPost {
 		return events.ALBTargetGroupResponse{
 			StatusCode: 404,
 			Body:       `{"message": "rota não encontrada ou método não permitido"}`,

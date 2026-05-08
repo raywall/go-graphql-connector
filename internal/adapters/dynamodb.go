@@ -16,7 +16,14 @@ type DynamoDBAdapter struct {
 	table  string
 }
 
-func NewDynamoDBAdapter(region, table, accessKeyId, secretAccessKey string) Adapter {
+func NewDynamoDBAdapter(region, table, accessKeyId, secretAccessKey string) (Adapter, error) {
+	if region == "" {
+		return nil, fmt.Errorf("dynamodb region is required")
+	}
+	if table == "" {
+		return nil, fmt.Errorf("dynamodb table is required")
+	}
+
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(region),
 		config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
@@ -27,17 +34,17 @@ func NewDynamoDBAdapter(region, table, accessKeyId, secretAccessKey string) Adap
 		})),
 	)
 	if err != nil {
-		panic(fmt.Errorf("failed to load AWS config: %v", err))
+		return nil, fmt.Errorf("failed to load AWS config: %v", err)
 	}
 
 	return &DynamoDBAdapter{
 		client: dynamodb.NewFromConfig(cfg),
 		table:  table,
-	}
+	}, nil
 }
 
-func (d *DynamoDBAdapter) GetData(key string) (map[string]interface{}, error) {
-	result, err := d.client.GetItem(context.Background(), &dynamodb.GetItemInput{
+func (d *DynamoDBAdapter) GetData(ctx context.Context, key string) (map[string]interface{}, error) {
+	result, err := d.client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(d.table),
 		Key: map[string]types.AttributeValue{
 			"id": &types.AttributeValueMemberS{Value: key},
