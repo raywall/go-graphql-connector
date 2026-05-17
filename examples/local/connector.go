@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -25,6 +26,9 @@ var (
 )
 
 func init() {
+	setEnvDefault("EXTERNAL_API_URL", "https://mock.raysouz.studio")
+	setEnvDefault("EXTERNAL_API_SERIAL", "b7af3a9e-6d1a-4b15-9837-3e0f0b47e5b4")
+
 	resources := &cloud.CloudContextList{
 		cloud.SSMContext,
 		cloud.SecretsManagerContext,
@@ -81,7 +85,17 @@ func main() {
 		lambda.Start(requestHandler)
 	} else {
 		http.Handle(api.Config.Route, wrappedHandler)
-		fmt.Printf("Server running at http://localhost:8080%s\n", config.Route)
-		log.Fatal(http.ListenAndServe(":8080", nil))
+		port := strings.TrimSpace(os.Getenv("PORT"))
+		if port == "" {
+			port = "8090"
+		}
+		fmt.Printf("Server running at http://localhost:%s%s\n", port, config.Route)
+		log.Fatal(http.ListenAndServe(":"+port, nil))
+	}
+}
+
+func setEnvDefault(key, value string) {
+	if strings.TrimSpace(os.Getenv(key)) == "" {
+		_ = os.Setenv(key, value)
 	}
 }

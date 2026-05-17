@@ -141,10 +141,10 @@ func (c *Config) GetConnectorsValue() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get the connectors value: %v", err)
 		}
-		return value.(string), nil
+		return os.ExpandEnv(value.(string)), nil
 	}
 
-	return c.Connectors, nil
+	return os.ExpandEnv(c.Connectors), nil
 }
 
 func (c *Config) GetMockValue() (string, error) {

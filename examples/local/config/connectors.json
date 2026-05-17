@@ -1,38 +1,32 @@
 {
-    "connectors": [
-        {
-            "field": "convenio",
-            "adapter": "redis",
-            "adapterConfig": {
-                "endpoint": "localhost:6379",
-                "password": ""
-            },
-            "keyPattern": "CVN_{codigoConvenio}",
-            "timeoutMs": 500,
-            "retries": 1
-        },
-        {
-            "field": "limiteOperacional",
-            "adapter": "redis",
-            "adapterConfig": {
-                "endpoint": "localhost:6379",
-                "password": ""
-            },
-            "keyPattern": "LMT_{codigoConvenio}",
-            "timeoutMs": 500,
-            "retries": 1
-        },
-        {
-            "field": "taxaFunding",
-            "adapter": "redis",
-            "adapterConfig": {
-                "endpoint": "localhost:6379",
-                "password": ""
-            },
-            "keyPattern": "FDN_{codigoConvenio}",
-            "timeoutMs": 500,
-            "retries": 1,
-            "optional": true
+  "connectors": [
+    {
+      "field": "order",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/pedidos/{pedidoID}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
         }
-    ]
+      },
+      "timeoutMs": 1500,
+      "retries": 1
+    },
+    {
+      "field": "customer",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/customers/{customerID}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+        }
+      },
+      "timeoutMs": 1500,
+      "retries": 1
+    }
+  ]
 }
