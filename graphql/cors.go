@@ -12,6 +12,7 @@ func CORSFromEnv() Middleware {
 		allowed = []string{
 			"http://localhost:8089",
 			"http://127.0.0.1:8089",
+			"https://raywall.github.io",
 		}
 	}
 	return CORS(allowed)
