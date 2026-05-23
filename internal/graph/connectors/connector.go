@@ -12,13 +12,20 @@ import (
 )
 
 type ConnectorConfig struct {
-	Field         string                 `json:"field"`
-	Adapter       string                 `json:"adapter"`
-	AdapterConfig map[string]interface{} `json:"adapterConfig"`
-	KeyPattern    string                 `json:"keyPattern"`
-	Optional      bool                   `json:"optional,omitempty"`
-	TimeoutMS     int                    `json:"timeoutMs,omitempty"`
-	Retries       int                    `json:"retries,omitempty"`
+	Field             string                  `json:"field"`
+	Adapter           string                  `json:"adapter"`
+	AdapterConfig     map[string]interface{}  `json:"adapterConfig"`
+	KeyPattern        string                  `json:"keyPattern"`
+	ResponseTransform ResponseTransformConfig `json:"responseTransform,omitempty"`
+	Optional          bool                    `json:"optional,omitempty"`
+	TimeoutMS         int                     `json:"timeoutMs,omitempty"`
+	Retries           int                     `json:"retries,omitempty"`
+}
+
+type ResponseTransformConfig struct {
+	UnwrapPath   string `json:"unwrapPath,omitempty"`
+	ErrorsPath   string `json:"errorsPath,omitempty"`
+	FailOnErrors bool   `json:"failOnErrors,omitempty"`
 }
 
 type Config struct {
@@ -27,17 +34,18 @@ type Config struct {
 
 type Connector interface {
 	Field() string
-	GetData(ctx context.Context, args map[string]interface{}) (map[string]interface{}, error)
+	GetData(ctx context.Context, args map[string]interface{}) (interface{}, error)
 	Optional() bool
 }
 
 type connector struct {
-	field      string
-	adapter    adapters.Adapter
-	keyPattern string
-	optional   bool
-	timeout    time.Duration
-	retries    int
+	field             string
+	adapter           adapters.Adapter
+	keyPattern        string
+	responseTransform ResponseTransformConfig
+	optional          bool
+	timeout           time.Duration
+	retries           int
 }
 
 func NewConnector(config ConnectorConfig) (Connector, error) {
@@ -111,12 +119,13 @@ func NewConnector(config ConnectorConfig) (Connector, error) {
 	}
 
 	return &connector{
-		field:      config.Field,
-		adapter:    adapter,
-		keyPattern: config.KeyPattern,
-		optional:   config.Optional,
-		timeout:    timeout,
-		retries:    config.Retries,
+		field:             config.Field,
+		adapter:           adapter,
+		keyPattern:        config.KeyPattern,
+		responseTransform: config.ResponseTransform,
+		optional:          config.Optional,
+		timeout:           timeout,
+		retries:           config.Retries,
 	}, nil
 }
 
@@ -128,7 +137,7 @@ func (c *connector) Optional() bool {
 	return c.optional
 }
 
-func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (map[string]interface{}, error) {
+func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 	key, err := renderTemplate(c.keyPattern, args)
 	if err != nil {
 		return nil, err
@@ -140,7 +149,7 @@ func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (m
 		data, err := c.adapter.GetData(callCtx, key)
 		cancel()
 		if err == nil {
-			return data, nil
+			return applyResponseTransform(data, c.responseTransform)
 		}
 		lastErr = err
 		if ctx.Err() != nil {
@@ -186,6 +195,55 @@ func renderTemplate(pattern string, args map[string]interface{}) (string, error)
 		return "", fmt.Errorf("missing argument(s) for template %q: %s", pattern, strings.Join(missing, ", "))
 	}
 	return rendered, nil
+}
+
+func applyResponseTransform(data map[string]interface{}, transform ResponseTransformConfig) (interface{}, error) {
+	if transform.ErrorsPath != "" && transform.FailOnErrors {
+		if errorsValue, ok := valueAtPath(data, transform.ErrorsPath); ok && hasErrors(errorsValue) {
+			return nil, fmt.Errorf("connector response contains errors at %q: %v", transform.ErrorsPath, errorsValue)
+		}
+	}
+	if transform.UnwrapPath == "" {
+		return data, nil
+	}
+	value, ok := valueAtPath(data, transform.UnwrapPath)
+	if !ok {
+		return nil, fmt.Errorf("unwrapPath %q not found in connector response", transform.UnwrapPath)
+	}
+	return value, nil
+}
+
+func valueAtPath(data map[string]interface{}, path string) (interface{}, bool) {
+	if path == "" {
+		return data, true
+	}
+	var current interface{} = data
+	for _, part := range strings.Split(path, ".") {
+		values, ok := current.(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		current, ok = values[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+func hasErrors(value interface{}) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case []interface{}:
+		return len(typed) > 0
+	case []string:
+		return len(typed) > 0
+	case string:
+		return strings.TrimSpace(typed) != ""
+	default:
+		return true
+	}
 }
 
 func stringMap(value interface{}) map[string]string {

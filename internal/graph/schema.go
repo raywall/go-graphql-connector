@@ -36,6 +36,12 @@ type SchemaConfig struct {
 }
 
 func getGraphQLOutputType(field FieldConfig, typeMap map[string]*graphql.Object) (graphql.Output, error) {
+	basicTypes := map[string]graphql.Type{
+		"Int":     graphql.Int,
+		"Boolean": graphql.Boolean,
+		"Float":   graphql.Float,
+		"String":  graphql.String,
+	}
 	switch field.Type {
 	case "Int":
 		return graphql.Int, nil
@@ -49,12 +55,7 @@ func getGraphQLOutputType(field FieldConfig, typeMap map[string]*graphql.Object)
 		if field.OfType == "" {
 			return nil, fmt.Errorf("list type must specify ofType")
 		}
-		if basicType, exists := map[string]graphql.Type{
-			"Int":     graphql.Int,
-			"Boolean": graphql.Boolean,
-			"Float":   graphql.Float,
-			"String":  graphql.String,
-		}[field.OfType]; exists {
+		if basicType, exists := basicTypes[field.OfType]; exists {
 			return graphql.NewList(basicType), nil
 		}
 		if objType, exists := typeMap[field.OfType]; exists {
@@ -71,12 +72,7 @@ func getGraphQLOutputType(field FieldConfig, typeMap map[string]*graphql.Object)
 		if field.OfType == "" {
 			return nil, fmt.Errorf("nonnull type must specify ofType")
 		}
-		if basicType, exists := map[string]graphql.Type{
-			"Int":     graphql.Int,
-			"Boolean": graphql.Boolean,
-			"Float":   graphql.Float,
-			"String":  graphql.String,
-		}[field.OfType]; exists {
+		if basicType, exists := basicTypes[field.OfType]; exists {
 			return graphql.NewNonNull(basicType), nil
 		}
 		if objType, exists := typeMap[field.OfType]; exists {

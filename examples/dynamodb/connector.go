@@ -46,7 +46,7 @@ func init() {
 		panic(err)
 	}
 
-	wrappedHandler = api.NewHandler(config.Pretty)
+	wrappedHandler = api.NewHandler(config.Pretty, graphql.CORSFromEnv())
 	adapter = graphql.WrapHandler(wrappedHandler).ToALB()
 }
 

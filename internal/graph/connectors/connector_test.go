@@ -45,3 +45,49 @@ func TestNewConnectorValidatesRDSConfig(t *testing.T) {
 		t.Fatal("expected rds dsn validation error")
 	}
 }
+
+func TestApplyResponseTransformUnwrapsPath(t *testing.T) {
+	got, err := applyResponseTransform(map[string]interface{}{
+		"data": []interface{}{
+			map[string]interface{}{"id": "1"},
+		},
+		"errors": []interface{}{},
+	}, ResponseTransformConfig{
+		UnwrapPath:   "data",
+		ErrorsPath:   "errors",
+		FailOnErrors: true,
+	})
+	if err != nil {
+		t.Fatalf("applyResponseTransform returned error: %v", err)
+	}
+	items, ok := got.([]interface{})
+	if !ok || len(items) != 1 {
+		t.Fatalf("applyResponseTransform = %#v", got)
+	}
+}
+
+func TestApplyResponseTransformFailsOnErrors(t *testing.T) {
+	_, err := applyResponseTransform(map[string]interface{}{
+		"data":   []interface{}{},
+		"errors": []interface{}{"boom"},
+	}, ResponseTransformConfig{
+		UnwrapPath:   "data",
+		ErrorsPath:   "errors",
+		FailOnErrors: true,
+	})
+	if err == nil {
+		t.Fatal("expected response errors to fail transform")
+	}
+}
+
+func TestApplyResponseTransformKeepsOriginalWhenNotConfigured(t *testing.T) {
+	data := map[string]interface{}{"data": []interface{}{}}
+	got, err := applyResponseTransform(data, ResponseTransformConfig{})
+	if err != nil {
+		t.Fatalf("applyResponseTransform returned error: %v", err)
+	}
+	gotMap, ok := got.(map[string]interface{})
+	if !ok || len(gotMap) != 1 {
+		t.Fatal("expected original response when transform is not configured")
+	}
+}

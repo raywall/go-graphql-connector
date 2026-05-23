@@ -1,31 +1,42 @@
 {
   "connectors": [
     {
-      "field": "order",
+      "field": "custodias",
       "adapter": "rest",
       "adapterConfig": {
         "baseUrl": "${EXTERNAL_API_URL}",
-        "endpoint": "/pedidos/{pedidoID}",
+        "endpoint": "/consulta-contratos-custodia/v1/clientes/{codigoCliente}/operacoes?operacaoId={identificadorOperacaoCredito}&expand=convenio,cliente,produto,parcelas&siglaCustodia=SF,F5&situacaoOperacao=ativa",
         "method": "GET",
         "headers": {
           "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
         }
       },
-      "timeoutMs": 1500,
+      "responseTransform": {
+        "unwrapPath": "data",
+        "errorsPath": "errors",
+        "failOnErrors": true
+      },
+      "timeoutMs": 2000,
       "retries": 1
     },
     {
-      "field": "customer",
+      "field": "saldos",
       "adapter": "rest",
       "adapterConfig": {
         "baseUrl": "${EXTERNAL_API_URL}",
-        "endpoint": "/customers/{customerID}",
+        "endpoint": "/posvenda/v1/operacoes_credito?id_operacao={identificadorOperacaoCredito}&data_posicao_calculo={dataPosicaoCalculo}&expand=saldo",
         "method": "GET",
         "headers": {
-          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}",
+          "x-api-filter": "OPERACAO"
         }
       },
-      "timeoutMs": 1500,
+      "responseTransform": {
+        "unwrapPath": "data",
+        "errorsPath": "errors",
+        "failOnErrors": true
+      },
+      "timeoutMs": 2000,
       "retries": 1
     }
   ]
