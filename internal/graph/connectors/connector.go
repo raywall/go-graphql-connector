@@ -32,6 +32,10 @@ type Config struct {
 	Connectors []ConnectorConfig `json:"connectors"`
 }
 
+type Options struct {
+	TokenProvider adapters.TokenProvider
+}
+
 type Connector interface {
 	Field() string
 	GetData(ctx context.Context, args map[string]interface{}) (interface{}, error)
@@ -49,6 +53,10 @@ type connector struct {
 }
 
 func NewConnector(config ConnectorConfig) (Connector, error) {
+	return NewConnectorWithOptions(config, Options{})
+}
+
+func NewConnectorWithOptions(config ConnectorConfig, options Options) (Connector, error) {
 	if config.Field == "" {
 		return nil, fmt.Errorf("field is required")
 	}
@@ -87,6 +95,9 @@ func NewConnector(config ConnectorConfig) (Connector, error) {
 		body, _ := config.AdapterConfig["body"].(string)
 		headers := stringMap(config.AdapterConfig["headers"])
 		adapter, err = adapters.NewRestAdapter(baseURL, method, headers, body)
+		if restAdapter, ok := adapter.(*adapters.RestAdapter); ok {
+			restAdapter.SetTokenProvider(options.TokenProvider)
+		}
 		if config.KeyPattern == "" {
 			config.KeyPattern, _ = config.AdapterConfig["endpoint"].(string)
 		}
@@ -161,6 +172,10 @@ func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (i
 }
 
 func LoadConnectors(connectorConfig string) (map[string]Connector, error) {
+	return LoadConnectorsWithOptions(connectorConfig, Options{})
+}
+
+func LoadConnectorsWithOptions(connectorConfig string, options Options) (map[string]Connector, error) {
 	var config Config
 	if err := json.Unmarshal([]byte(connectorConfig), &config); err != nil {
 		return nil, fmt.Errorf("error parsing connectors config: %v", err)
@@ -168,7 +183,7 @@ func LoadConnectors(connectorConfig string) (map[string]Connector, error) {
 
 	connectors := make(map[string]Connector)
 	for _, connConfig := range config.Connectors {
-		conn, err := NewConnector(connConfig)
+		conn, err := NewConnectorWithOptions(connConfig, options)
 		if err != nil {
 			return nil, fmt.Errorf("error creating connector for %s: %v", connConfig.Field, err)
 		}

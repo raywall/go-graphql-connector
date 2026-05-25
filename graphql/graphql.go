@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	gp "github.com/graphql-go/graphql"
-	"github.com/raywall/cloud-easy-connector/pkg/auth"
 	"github.com/raywall/cloud-easy-connector/pkg/cloud"
+	"github.com/raywall/go-graphql-connector/internal/adapters"
 	"github.com/raywall/go-graphql-connector/internal/graph"
 )
 
@@ -13,11 +13,11 @@ import (
 const route string = "/graphql"
 
 type GraphQL struct {
-	tokenManager auth.AutoManagedToken `json:"-"`
-	AccessToken  *string               `json:"token"`
-	Config       Config                `json:"config"`
-	Resolver     *graph.Resolver       `json:"resolver"`
-	Schema       *gp.Schema            `json:"schema"`
+	tokenManager *managedToken   `json:"-"`
+	AccessToken  *string         `json:"token"`
+	Config       Config          `json:"config"`
+	Resolver     *graph.Resolver `json:"resolver"`
+	Schema       *gp.Schema      `json:"schema"`
 }
 
 func New(config *Config, resources *cloud.CloudContextList, region, endpoint string) (*GraphQL, error) {
@@ -45,14 +45,46 @@ func New(config *Config, resources *cloud.CloudContextList, region, endpoint str
 		return nil, fmt.Errorf("failed to create a new AWS Cloud Context: %v", err)
 	}
 
+	// token
+	if config.Authorization.RequireTokenSTS {
+		// auth_service_url
+		authServiceUrl, err := config.GetTokenServiceURL()
+		if err != nil {
+			return nil, err
+		}
+
+		// credentials
+		clientID, clientSecret, err := config.GetCredentials()
+		if err != nil {
+			return nil, err
+		}
+
+		api.tokenManager = newManagedToken(
+			authServiceUrl,
+			clientID,
+			clientSecret,
+			config.GetTokenServiceHeaders())
+		if token, err := api.tokenManager.GetToken(); err != nil {
+			return nil, fmt.Errorf("failed to start STS token manager: %v", err)
+		} else {
+			api.AccessToken = &token
+		}
+	}
+
 	// connections
 	connectionsConfig, err := config.GetConnectorsValue()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get the connections config: %v", err)
 	}
 
+	var tokenProvider adapters.TokenProvider
+	if api.tokenManager != nil {
+		tokenProvider = api.tokenManager
+	}
+
 	res, err := graph.NewResolverWithOptions(connectionsConfig, graph.ResolverOptions{
-		AllowPartial: config.AllowPartial,
+		AllowPartial:  config.AllowPartial,
+		TokenProvider: tokenProvider,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a resolver: %v", err)
@@ -78,27 +110,6 @@ func New(config *Config, resources *cloud.CloudContextList, region, endpoint str
 	api.Schema, err = graph.CreateSchema(res, schemaConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a schema: %v", err)
-	}
-
-	// token
-	if config.Authorization.RequireTokenSTS {
-		// auth_service_url
-		authServiceUrl, err := config.GetTokenServiceURL()
-		if err != nil {
-			return nil, err
-		}
-
-		// credentials
-		clientID, clientSecret, err := config.GetCredentials()
-		if err != nil {
-			return nil, err
-		}
-
-		config.CloudContext.NewAutoManagedToken(
-			authServiceUrl,
-			clientID,
-			clientSecret,
-			false)
 	}
 
 	return &api, nil

@@ -28,13 +28,17 @@ var (
 func init() {
 	setEnvDefault("EXTERNAL_API_URL", "https://mock.raysouz.studio")
 	setEnvDefault("EXTERNAL_API_SERIAL", "b7af3a9e-6d1a-4b15-9837-3e0f0b47e5b4")
+	setEnvDefault("STS_TOKEN_URL", "https://mock.raysouz.studio/api/oauth/token")
+	setEnvDefault("STS_SERIAL_NUMBER", "b7af3a9e-6d1a-4b15-9837-3e0f0b47e5b4")
+	setEnvDefault("STS_CLIENT_ID", "f47ac10b-58cc-4372-a567-0e02b2c3d479")
+	setEnvDefault("STS_CLIENT_SECRET", "550e8400-e29b-41d4-a716-446655440000")
 
 	resources := &cloud.CloudContextList{
 		cloud.SSMContext,
 		cloud.SecretsManagerContext,
 	}
 
-	config, err = graphql.LoadConfig("examples/local/config/service.json")
+	config, err = graphql.LoadConfig("examples/pedidos/config/service.json")
 	if err != nil {
 		config, err = graphql.LoadConfig("config/service.json")
 	}

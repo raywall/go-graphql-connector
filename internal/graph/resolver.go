@@ -12,6 +12,7 @@ import (
 
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/language/ast"
+	"github.com/raywall/go-graphql-connector/internal/adapters"
 	"github.com/raywall/go-graphql-connector/internal/graph/connectors"
 
 	"github.com/raywall/cloud-easy-connector/pkg/cloud"
@@ -38,7 +39,8 @@ type mockResolver struct {
 }
 
 type ResolverOptions struct {
-	AllowPartial bool
+	AllowPartial  bool
+	TokenProvider adapters.TokenProvider
 }
 
 func NewResolver(connectorConfig string) (Resolver, error) {
@@ -46,7 +48,9 @@ func NewResolver(connectorConfig string) (Resolver, error) {
 }
 
 func NewResolverWithOptions(connectorConfig string, options ResolverOptions) (Resolver, error) {
-	connectors, err := connectors.LoadConnectors(connectorConfig)
+	connectors, err := connectors.LoadConnectorsWithOptions(connectorConfig, connectors.Options{
+		TokenProvider: options.TokenProvider,
+	})
 	if err != nil {
 		return nil, err
 	}

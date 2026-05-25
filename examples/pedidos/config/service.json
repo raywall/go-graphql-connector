@@ -6,5 +6,18 @@
   "route": "/graphql",
   "pretty": true,
   "graphiql": true,
-  "allow_partial": false
+  "allow_partial": false,
+  "authorization": {
+    "require_token_sts": true,
+    "tokenService": {
+      "token_authorization_url": "${STS_TOKEN_URL}",
+      "headers": {
+        "x-serial-number": "${STS_SERIAL_NUMBER}"
+      },
+      "credentials": {
+        "client_id": "${STS_CLIENT_ID}",
+        "client_secret": "${STS_CLIENT_SECRET}"
+      }
+    }
+  }
 }

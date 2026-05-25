@@ -24,8 +24,11 @@ type TokenService struct {
 	// TokenAuthorizationURL represents the URL for the Token service
 	TokenAuthorizationURL string `json:"token_authorization_url"`
 
+	// Headers contains optional HTTP headers sent to the token service.
+	Headers map[string]string `json:"headers,omitempty"`
+
 	// Credentials representa as credenciais que serão utilizadas para gerar um novo token
-	Credentials Credentials
+	Credentials Credentials `json:"credentials"`
 }
 
 // Authorization contains the authorization settings to be used by the Graphql API connectors
@@ -35,7 +38,7 @@ type Authorization struct {
 	RequireTokenSTS bool `json:"require_token_sts"`
 
 	// TokenService contains the settings required to generate an STS token
-	TokenService TokenService
+	TokenService TokenService `json:"tokenService"`
 }
 
 // Config contains all the configuration required to create and instantiate a dynamic GraphQL API
@@ -173,7 +176,15 @@ func (c *Config) GetTokenServiceURL() (string, error) {
 		authService = value.(string)
 	}
 
-	return authService, nil
+	return os.ExpandEnv(authService), nil
+}
+
+func (c *Config) GetTokenServiceHeaders() map[string]string {
+	headers := make(map[string]string, len(c.Authorization.TokenService.Headers))
+	for key, value := range c.Authorization.TokenService.Headers {
+		headers[key] = os.ExpandEnv(value)
+	}
+	return headers
 }
 
 func (c *Config) GetCredentials() (string, string, error) {
@@ -205,5 +216,5 @@ func (c *Config) GetCredentials() (string, string, error) {
 		}
 	}
 
-	return clientID, clientSecret, nil
+	return os.ExpandEnv(clientID), os.ExpandEnv(clientSecret), nil
 }

@@ -7,15 +7,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"time"
 )
 
 type RestAdapter struct {
-	client  *http.Client
-	baseURL string
-	method  string
-	headers map[string]string
-	body    string
+	client        *http.Client
+	baseURL       string
+	method        string
+	headers       map[string]string
+	body          string
+	tokenProvider TokenProvider
+}
+
+type TokenProvider interface {
+	GetToken() (string, error)
 }
 
 func NewRestAdapter(baseURL, method string, headers map[string]string, body string) (Adapter, error) {
@@ -35,6 +41,26 @@ func NewRestAdapter(baseURL, method string, headers map[string]string, body stri
 	}, nil
 }
 
+func (r *RestAdapter) SetTokenProvider(provider TokenProvider) {
+	if isNilTokenProvider(provider) {
+		return
+	}
+	r.tokenProvider = provider
+}
+
+func isNilTokenProvider(provider TokenProvider) bool {
+	if provider == nil {
+		return true
+	}
+	value := reflect.ValueOf(provider)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
 func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]interface{}, error) {
 	url := r.baseURL + key
 	var body io.Reader
@@ -48,6 +74,13 @@ func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]inter
 	}
 	for name, value := range r.headers {
 		req.Header.Set(name, value)
+	}
+	if r.tokenProvider != nil && req.Header.Get("Authorization") == "" {
+		token, err := r.tokenProvider.GetToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get STS token for REST API %s: %v", url, err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := r.client.Do(req)
