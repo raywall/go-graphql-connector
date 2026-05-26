@@ -24,7 +24,7 @@ type managedToken struct {
 	expiresAt time.Time
 }
 
-func newManagedToken(tokenURL, clientID, clientSecret string, headers map[string]string) *managedToken {
+func newManagedToken(tokenURL, clientID, clientSecret string, headers map[string]string, skipTLSVerify bool) *managedToken {
 	return &managedToken{
 		url:          tokenURL,
 		clientID:     clientID,
@@ -34,6 +34,9 @@ func newManagedToken(tokenURL, clientID, clientSecret string, headers map[string
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
 				TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: skipTLSVerify, //nolint:gosec // Controlled by explicit service.json opt-in for private CAs.
+				},
 			},
 		},
 	}

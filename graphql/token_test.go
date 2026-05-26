@@ -50,7 +50,7 @@ func TestManagedTokenSendsClientCredentialsHeadersAndCachesToken(t *testing.T) {
 
 	manager := newManagedToken(server.URL, "client-1", "secret-1", map[string]string{
 		"x-serial-number": "serial-123",
-	})
+	}, false)
 
 	token, err := manager.GetToken()
 	if err != nil {
@@ -68,5 +68,30 @@ func TestManagedTokenSendsClientCredentialsHeadersAndCachesToken(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("calls = %d", calls)
+	}
+}
+
+func TestManagedTokenCanSkipTLSVerify(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "private-token",
+			"expires_in":   300,
+		})
+	}))
+	defer server.Close()
+
+	secureManager := newManagedToken(server.URL, "client-1", "secret-1", nil, false)
+	if _, err := secureManager.GetToken(); err == nil {
+		t.Fatal("expected certificate validation error without skip_tls_verify")
+	}
+
+	insecureManager := newManagedToken(server.URL, "client-1", "secret-1", nil, true)
+	token, err := insecureManager.GetToken()
+	if err != nil {
+		t.Fatalf("GetToken with skip_tls_verify returned error: %v", err)
+	}
+	if token != "private-token" {
+		t.Fatalf("token = %q", token)
 	}
 }

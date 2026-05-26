@@ -37,6 +37,10 @@ type Authorization struct {
 	// for API connectors
 	RequireTokenSTS bool `json:"require_token_sts"`
 
+	// SkipTLSVerify disables TLS certificate validation for the token service HTTP client.
+	// Keep it false unless the token service is private and uses an internal/self-signed certificate.
+	SkipTLSVerify bool `json:"skip_tls_verify,omitempty"`
+
 	// TokenService contains the settings required to generate an STS token
 	TokenService TokenService `json:"tokenService"`
 }

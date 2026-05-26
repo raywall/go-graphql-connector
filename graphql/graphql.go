@@ -63,7 +63,9 @@ func New(config *Config, resources *cloud.CloudContextList, region, endpoint str
 			authServiceUrl,
 			clientID,
 			clientSecret,
-			config.GetTokenServiceHeaders())
+			config.GetTokenServiceHeaders(),
+			config.Authorization.SkipTLSVerify)
+
 		if token, err := api.tokenManager.GetToken(); err != nil {
 			return nil, fmt.Errorf("failed to start STS token manager: %v", err)
 		} else {

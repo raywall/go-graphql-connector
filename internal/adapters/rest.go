@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"reflect"
 	"time"
@@ -80,6 +81,7 @@ func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]inter
 		if err != nil {
 			return nil, fmt.Errorf("failed to get STS token for REST API %s: %v", url, err)
 		}
+		log.Printf("Using token from provider for REST API %s: %s", url, token)
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 

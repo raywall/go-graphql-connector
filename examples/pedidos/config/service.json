@@ -9,6 +9,7 @@
   "allow_partial": false,
   "authorization": {
     "require_token_sts": true,
+    "skip_tls_verify": false,
     "tokenService": {
       "token_authorization_url": "${STS_TOKEN_URL}",
       "headers": {
