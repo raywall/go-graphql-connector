@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "schema": "local:schema.json",
+  "connectors": "local:connectors.json",
+  "mock": "local:mock.json",
+  "route": "/graphql",
+  "pretty": true,
+  "graphiql": true,
+  "allow_partial": false,
+  "authorization": {
+    "require_token_sts": true,
+    "skip_tls_verify": false,
+    "tokenService": {
+      "token_authorization_url": "${STS_TOKEN_URL}",
+      "headers": {
+        "x-serial-number": "${STS_SERIAL_NUMBER}"
+      },
+      "credentials": {
+        "client_id": "${STS_CLIENT_ID}",
+        "client_secret": "${STS_CLIENT_SECRET}"
+      }
+    }
+  }
+}

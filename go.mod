@@ -1,4 +1,4 @@
-module github.com/raywall/go-graphql-integrator
+module github.com/raywall/go-graphql-connector
 
 go 1.24.1
 
@@ -17,6 +17,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/aws/aws-sdk-go v1.55.7 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.67 // indirect
@@ -37,7 +38,9 @@ require (
 	github.com/aws/smithy-go v1.22.2 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/go-sql-driver/mysql v1.10.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.1-0.20220621161143-b0104c826a24 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/lib/pq v1.12.3 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

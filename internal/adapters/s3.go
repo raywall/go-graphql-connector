@@ -15,7 +15,14 @@ type S3Adapter struct {
 	bucket string
 }
 
-func NewS3Adapter(region, bucket, accessKeyId, secretAccessKey string) Adapter {
+func NewS3Adapter(region, bucket, accessKeyId, secretAccessKey string) (Adapter, error) {
+	if region == "" {
+		return nil, fmt.Errorf("s3 region is required")
+	}
+	if bucket == "" {
+		return nil, fmt.Errorf("s3 bucket is required")
+	}
+
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(region),
 		config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
@@ -26,17 +33,17 @@ func NewS3Adapter(region, bucket, accessKeyId, secretAccessKey string) Adapter {
 		})),
 	)
 	if err != nil {
-		panic(fmt.Errorf("failed to load AWS config: %v", err))
+		return nil, fmt.Errorf("failed to load AWS config: %v", err)
 	}
 
 	return &S3Adapter{
 		client: s3.NewFromConfig(cfg),
 		bucket: bucket,
-	}
+	}, nil
 }
 
-func (s *S3Adapter) GetData(key string) (map[string]interface{}, error) {
-	result, err := s.client.GetObject(context.Background(), &s3.GetObjectInput{
+func (s *S3Adapter) GetData(ctx context.Context, key string) (map[string]interface{}, error) {
+	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})

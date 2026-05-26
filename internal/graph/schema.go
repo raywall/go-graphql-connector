@@ -2,7 +2,7 @@ package graph
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 
 	"github.com/graphql-go/graphql"
 )
@@ -35,54 +35,79 @@ type SchemaConfig struct {
 	Query QueryConfig  `json:"query"`
 }
 
-var typeMap map[string]*graphql.Object
-
-func getGraphQLType(field FieldConfig, typeMap map[string]*graphql.Object) graphql.Output {
+func getGraphQLOutputType(field FieldConfig, typeMap map[string]*graphql.Object) (graphql.Output, error) {
+	basicTypes := map[string]graphql.Type{
+		"Int":     graphql.Int,
+		"Boolean": graphql.Boolean,
+		"Float":   graphql.Float,
+		"String":  graphql.String,
+	}
 	switch field.Type {
 	case "Int":
-		return graphql.Int
+		return graphql.Int, nil
 	case "Boolean":
-		return graphql.Boolean
+		return graphql.Boolean, nil
 	case "Float":
-		return graphql.Float
+		return graphql.Float, nil
 	case "String":
-		return graphql.String
+		return graphql.String, nil
 	case "List":
 		if field.OfType == "" {
-			log.Fatalf("List type must specify ofType")
+			return nil, fmt.Errorf("list type must specify ofType")
 		}
-		if basicType, exists := map[string]graphql.Type{
-			"Int":    graphql.Int,
-			"String": graphql.String,
-		}[field.OfType]; exists {
-			return graphql.NewList(basicType)
+		if basicType, exists := basicTypes[field.OfType]; exists {
+			return graphql.NewList(basicType), nil
 		}
 		if objType, exists := typeMap[field.OfType]; exists {
-			return graphql.NewList(objType)
+			return graphql.NewList(objType), nil
 		}
 	case "Object":
 		if field.OfType == "" {
-			log.Fatalf("Object type must specify ofType")
+			return nil, fmt.Errorf("object type must specify ofType")
 		}
 		if objType, exists := typeMap[field.OfType]; exists {
-			return objType
+			return objType, nil
 		}
 	case "NonNull":
 		if field.OfType == "" {
-			log.Fatalf("NonNull type must specify ofType")
+			return nil, fmt.Errorf("nonnull type must specify ofType")
 		}
-		if basicType, exists := map[string]graphql.Type{
-			"Int":    graphql.Int,
-			"String": graphql.String,
-		}[field.OfType]; exists {
-			return graphql.NewNonNull(basicType)
+		if basicType, exists := basicTypes[field.OfType]; exists {
+			return graphql.NewNonNull(basicType), nil
 		}
 		if objType, exists := typeMap[field.OfType]; exists {
-			return graphql.NewNonNull(objType)
+			return graphql.NewNonNull(objType), nil
 		}
 	}
-	log.Fatalf("Unknown type: %s with ofType: %s", field.Type, field.OfType)
-	return nil
+	return nil, fmt.Errorf("unknown type: %s with ofType: %s", field.Type, field.OfType)
+}
+
+func getGraphQLInputType(arg ArgConfig) (graphql.Input, error) {
+	switch arg.Type {
+	case "Int":
+		return graphql.Int, nil
+	case "Boolean":
+		return graphql.Boolean, nil
+	case "Float":
+		return graphql.Float, nil
+	case "String":
+		return graphql.String, nil
+	case "NonNull":
+		switch arg.OfType {
+		case "Int":
+			return graphql.NewNonNull(graphql.Int), nil
+		case "Boolean":
+			return graphql.NewNonNull(graphql.Boolean), nil
+		case "Float":
+			return graphql.NewNonNull(graphql.Float), nil
+		case "String":
+			return graphql.NewNonNull(graphql.String), nil
+		default:
+			return nil, fmt.Errorf("unsupported non-null input type: %s", arg.OfType)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported input type: %s", arg.Type)
+	}
 }
 
 func CreateSchema(res Resolver, schemaConfig string) (*graphql.Schema, error) {
@@ -91,51 +116,53 @@ func CreateSchema(res Resolver, schemaConfig string) (*graphql.Schema, error) {
 		return nil, err
 	}
 
-	// Inicializar o mapa de tipos
-	typeMap = make(map[string]*graphql.Object)
+	typeMap := make(map[string]*graphql.Object)
 
-	// Criar tipos GraphQL
 	for _, typeDef := range config.Types {
-		fields := graphql.Fields{}
-		for _, field := range typeDef.Fields {
-			fields[field.Name] = &graphql.Field{
-				Type: getGraphQLType(field, typeMap),
-			}
+		if typeDef.Name == "" {
+			return nil, fmt.Errorf("schema type name is required")
 		}
 		typeMap[typeDef.Name] = graphql.NewObject(graphql.ObjectConfig{
 			Name:   typeDef.Name,
-			Fields: fields,
+			Fields: graphql.Fields{},
 		})
 	}
 
-	// Resolver dependências de tipos
 	for _, typeDef := range config.Types {
 		obj := typeMap[typeDef.Name]
 		for _, field := range typeDef.Fields {
+			fieldType, err := getGraphQLOutputType(field, typeMap)
+			if err != nil {
+				return nil, fmt.Errorf("invalid field %s.%s: %w", typeDef.Name, field.Name, err)
+			}
 			obj.AddFieldConfig(field.Name, &graphql.Field{
-				Type: getGraphQLType(field, typeMap),
+				Type: fieldType,
 			})
 		}
 	}
 
-	// Criar o tipo Query
 	queryFields := graphql.Fields{}
 	for _, field := range config.Query.Fields {
 		args := graphql.FieldConfigArgument{}
 		for _, arg := range field.Args {
+			argType, err := getGraphQLInputType(arg)
+			if err != nil {
+				return nil, fmt.Errorf("invalid argument %s.%s: %w", field.Name, arg.Name, err)
+			}
 			args[arg.Name] = &graphql.ArgumentConfig{
-				Type: getGraphQLType(FieldConfig{Type: arg.Type, OfType: arg.OfType}, typeMap),
+				Type: argType,
 			}
 		}
+		fieldType, err := getGraphQLOutputType(field, typeMap)
+		if err != nil {
+			return nil, fmt.Errorf("invalid query field %s: %w", field.Name, err)
+		}
+		queryField := field
 		queryFields[field.Name] = &graphql.Field{
-			Type: getGraphQLType(field, typeMap),
+			Type: fieldType,
 			Args: args,
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-				// Mapear o campo para o resolver correspondente
-				if field.Name == "dataSources" {
-					return res.ResolveDataSource(p)
-				}
-				return nil, nil
+				return res.ResolveField(queryField.Name, p)
 			},
 		}
 	}
@@ -145,7 +172,6 @@ func CreateSchema(res Resolver, schemaConfig string) (*graphql.Schema, error) {
 		Fields: queryFields,
 	})
 
-	// Criar o schema
 	schema, err := graphql.NewSchema(graphql.SchemaConfig{
 		Query: queryType,
 	})

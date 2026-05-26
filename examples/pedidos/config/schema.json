@@ -1,0 +1,107 @@
+{
+  "types": [
+    {
+      "name": "OrderItem",
+      "fields": [
+        {
+          "name": "produto_id",
+          "type": "String"
+        },
+        {
+          "name": "quantidade",
+          "type": "Int"
+        }
+      ]
+    },
+    {
+      "name": "Order",
+      "fields": [
+        {
+          "name": "pedido_id",
+          "type": "String"
+        },
+        {
+          "name": "cliente_id",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "String"
+        },
+        {
+          "name": "valor_total",
+          "type": "Float"
+        },
+        {
+          "name": "endereco_entrega",
+          "type": "String"
+        },
+        {
+          "name": "itens",
+          "type": "List",
+          "ofType": "OrderItem"
+        }
+      ]
+    },
+    {
+      "name": "Customer",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "String"
+        },
+        {
+          "name": "riskSegment",
+          "type": "String"
+        },
+        {
+          "name": "creditLimit",
+          "type": "Float"
+        },
+        {
+          "name": "sourceSystem",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "WorkflowData",
+      "fields": [
+        {
+          "name": "order",
+          "type": "Object",
+          "ofType": "Order"
+        },
+        {
+          "name": "customer",
+          "type": "Object",
+          "ofType": "Customer"
+        }
+      ]
+    }
+  ],
+  "query": {
+    "name": "Query",
+    "fields": [
+      {
+        "name": "dataSources",
+        "type": "Object",
+        "ofType": "WorkflowData",
+        "args": [
+          {
+            "name": "pedidoID",
+            "type": "String"
+          },
+          {
+            "name": "customerID",
+            "type": "String"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "connectors": [
+    {
+      "field": "order",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/pedidos/{pedidoID}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+        }
+      },
+      "timeoutMs": 1500,
+      "retries": 1
+    },
+    {
+      "field": "customer",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/customers/{customerID}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+        }
+      },
+      "timeoutMs": 1500,
+      "retries": 1
+    }
+  ]
+}

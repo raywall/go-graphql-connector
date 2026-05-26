@@ -1,46 +1,107 @@
 package adapters
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"strings"
+	"reflect"
+	"time"
 )
 
 type RestAdapter struct {
-	client   *http.Client
-	baseUrl  string
-	endpoint string
+	client        *http.Client
+	baseURL       string
+	method        string
+	headers       map[string]string
+	body          string
+	tokenProvider TokenProvider
 }
 
-func NewRestAdapter(baseUrl, endpoint string) Adapter {
+type TokenProvider interface {
+	GetToken() (string, error)
+}
+
+func NewRestAdapter(baseURL, method string, headers map[string]string, body string) (Adapter, error) {
+	if baseURL == "" {
+		return nil, fmt.Errorf("rest baseUrl is required")
+	}
+	if method == "" {
+		method = http.MethodGet
+	}
+
 	return &RestAdapter{
-		client:   &http.Client{},
-		baseUrl:  baseUrl,
-		endpoint: endpoint,
+		client:  &http.Client{Timeout: 10 * time.Second},
+		baseURL: baseURL,
+		method:  method,
+		headers: headers,
+		body:    body,
+	}, nil
+}
+
+func (r *RestAdapter) SetTokenProvider(provider TokenProvider) {
+	if isNilTokenProvider(provider) {
+		return
+	}
+	r.tokenProvider = provider
+}
+
+func isNilTokenProvider(provider TokenProvider) bool {
+	if provider == nil {
+		return true
+	}
+	value := reflect.ValueOf(provider)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
 	}
 }
 
-func (r *RestAdapter) GetData(key string) (map[string]interface{}, error) {
-	url := r.baseUrl + strings.Replace(r.endpoint, "{codigoConvenio}", key, 1)
-	resp, err := r.client.Get(url)
+func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]interface{}, error) {
+	url := r.baseURL + key
+	var body io.Reader
+	if r.body != "" {
+		body = bytes.NewBufferString(r.body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, r.method, url, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create REST request %s: %v", url, err)
+	}
+	for name, value := range r.headers {
+		req.Header.Set(name, value)
+	}
+	if r.tokenProvider != nil && req.Header.Get("Authorization") == "" {
+		token, err := r.tokenProvider.GetToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get STS token for REST API %s: %v", url, err)
+		}
+		log.Printf("Using token from provider for REST API %s: %s", url, token)
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from REST API %s: %v", url, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("REST API returned status %d for %s", resp.StatusCode, url)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read REST API response: %v", err)
 	}
 
 	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
+	if err := json.Unmarshal(responseBody, &data); err != nil {
 		return nil, fmt.Errorf("failed to decode REST API response: %v", err)
 	}
 	return data, nil

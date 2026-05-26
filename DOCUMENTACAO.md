@@ -1,0 +1,728 @@
+# Go GraphQL Connector - Documentacao
+
+O Go GraphQL Connector cria uma API GraphQL dinamica a partir de configuracao. A aplicacao informa o schema, os conectores e as fontes de configuracao; o projeto monta o handler GraphQL e resolve cada campo solicitado buscando dados nas origens configuradas.
+
+## Recursos Disponiveis
+
+- Schema GraphQL dinamico via JSON.
+- Conectores por campo GraphQL.
+- Busca paralela dos campos solicitados na query.
+- Suporte a Redis, REST, DynamoDB, S3 e RDS.
+- Templates dinamicos em chaves e endpoints, como `CVN_{codigoConvenio}`.
+- Configuracao via arquivo local, variavel de ambiente, AWS Systems Manager Parameter Store, AWS Secrets Manager, S3 ou DynamoDB.
+- Mock configuravel para testes locais.
+- Timeout, retry e falha opcional por conector.
+- Adaptadores para HTTP local, AWS ALB, API Gateway v1 e API Gateway v2.
+- Header `x-graphql-elapsed-time` em respostas GraphQL com o tempo de processamento em milissegundos.
+
+## Exemplo Rapido
+
+Execute o exemplo local:
+
+```bash
+make run-local
+```
+
+Endpoint:
+
+```text
+http://localhost:8080/graphql
+```
+
+Query de teste:
+
+```graphql
+query {
+  dataSources(codigoConvenio: 10341) {
+    convenio {
+      codigoConvenio
+      nomeConvenio
+    }
+    limiteOperacional {
+      percentualMaximoMargemConsignavel
+    }
+    taxaFunding {
+      dataFunding
+    }
+  }
+}
+```
+
+Com `curl`:
+
+```bash
+curl -i -X POST http://localhost:8080/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"query { dataSources(codigoConvenio: 10341) { convenio { codigoConvenio nomeConvenio } limiteOperacional { percentualMaximoMargemConsignavel } taxaFunding { dataFunding } } }"}'
+```
+
+A resposta inclui o header:
+
+```http
+x-graphql-elapsed-time: 3
+```
+
+O valor representa milissegundos e retorna apenas o numero.
+
+## Exemplo com Configuracao no DynamoDB, Dados no Redis e API REST
+
+O projeto tambem possui um exemplo em `examples/dynamodb` que carrega `schema` e `connectors` a partir de uma tabela DynamoDB. Nesse exemplo, o DynamoDB e usado apenas como origem de configuracao; os dados consultados pela GraphQL API vêm de Redis e de uma API HTTP.
+
+Suba a infraestrutura local:
+
+```bash
+make compose-up
+```
+
+O `docker-compose.yml` sobe:
+
+- LocalStack com DynamoDB.
+- Redis compativel com ElastiCache para o modo Community.
+- Uma API HTTP local para simular uma integracao REST.
+
+O script `scripts/localstack/init/01-dynamodb-config.sh` cria a tabela `graphql-config`, popula a chave `CVN_10341` no Redis e grava dois itens no DynamoDB:
+
+- `id = schema`
+- `id = connectors`
+
+Cada item usa o atributo `value` contendo o JSON da respectiva configuracao.
+
+Observacao: ElastiCache no LocalStack Community retorna `pro feature`. Por isso, o exemplo padrao usa um container Redis local como substituto compativel com ElastiCache. Se voce tiver LocalStack Pro, execute com:
+
+```bash
+USE_LOCALSTACK_ELASTICACHE=true LOCALSTACK_AUTH_TOKEN=seu_token make run-dynamodb
+```
+
+Nesse modo, o script tenta criar o cache cluster pelo servico ElastiCache do LocalStack.
+
+Execute o exemplo:
+
+```bash
+make run-dynamodb
+```
+
+Execute o teste automatizado do exemplo:
+
+```bash
+make test-dynamodb
+```
+
+O exemplo usa estes paths:
+
+```go
+config = &graphql.Config{
+    Schema:     "dynamodb:us-east-1:graphql-config:schema",
+    Connectors: "dynamodb:us-east-1:graphql-config:connectors",
+    Route:      "/graphql",
+    Pretty:     true,
+    GraphiQL:   true,
+}
+```
+
+Query de teste:
+
+```graphql
+query {
+  dataSources(codigoConvenio: 10341) {
+    convenio {
+      codigoConvenio
+      nomeConvenio
+      origem
+    }
+    limiteOperacional {
+      percentualMaximoMargemConsignavel
+      origem
+    }
+  }
+}
+```
+
+Nesse retorno:
+
+- `convenio` vem do Redis compativel com ElastiCache no modo Community, ou do ElastiCache do LocalStack quando `USE_LOCALSTACK_ELASTICACHE=true`.
+- `limiteOperacional` vem da API REST.
+
+Para encerrar o LocalStack:
+
+```bash
+make compose-down
+```
+
+## Configuracao Principal
+
+O arquivo de configuracao principal pode ser carregado com `graphql.LoadConfig`.
+
+Exemplo em `examples/config/service.json`:
+
+```json
+{
+  "version": "1",
+  "schema": "local:schema.json",
+  "connectors": "local:connectors.json",
+  "mock": "local:mock.json",
+  "route": "/graphql",
+  "pretty": true,
+  "graphiql": true,
+  "allow_partial": false
+}
+```
+
+Campos:
+
+- `schema`: conteudo inline do schema ou path para captura do schema.
+- `connectors`: conteudo inline dos conectores ou path para captura dos conectores.
+- `mock`: conteudo inline do mock ou path para captura do mock. Campo opcional.
+- `route`: rota HTTP usada pela API. Padrao: `/graphql`.
+- `pretty`: habilita resposta GraphQL formatada.
+- `graphiql`: habilita interface GraphiQL no handler.
+- `allow_partial`: permite que falhas em conectores retornem campos nulos sem falhar a consulta inteira.
+- `authorization`: configuracao opcional para token STS usado por conectores.
+
+## Fontes de Captura
+
+Os campos `schema`, `connectors`, `mock`, `token_authorization_url`, `client_id` e `client_secret` aceitam valores inline ou paths.
+
+### Conteudo Inline
+
+Use o JSON diretamente no campo:
+
+```json
+{
+  "schema": "{\"types\":[],\"query\":{\"name\":\"Query\",\"fields\":[]}}",
+  "connectors": "{\"connectors\":[]}"
+}
+```
+
+### Arquivo Local
+
+Formato:
+
+```text
+local:caminho/do/arquivo.json
+```
+
+Exemplo:
+
+```json
+{
+  "schema": "local:schema.json",
+  "connectors": "local:connectors.json",
+  "mock": "local:mock.json"
+}
+```
+
+Quando usado dentro de um arquivo carregado por `graphql.LoadConfig`, paths relativos sao resolvidos a partir do diretorio do arquivo de configuracao.
+
+### Variavel de Ambiente
+
+Formato:
+
+```text
+env:NOME_DA_VARIAVEL
+```
+
+Com valor padrao:
+
+```text
+env:NOME_DA_VARIAVEL:valor_padrao
+```
+
+Exemplo:
+
+```json
+{
+  "schema": "env:GRAPHQL_SCHEMA",
+  "connectors": "env:GRAPHQL_CONNECTORS"
+}
+```
+
+### AWS Systems Manager Parameter Store
+
+Formato:
+
+```text
+ssm:/nome/do/parametro
+```
+
+Com decrypt habilitado:
+
+```text
+ssm:/nome/do/parametro:true
+```
+
+Exemplo:
+
+```json
+{
+  "schema": "ssm:/graphql/dev/schema",
+  "connectors": "ssm:/graphql/dev/connectors:false",
+  "mock": "ssm:/graphql/dev/mock:false"
+}
+```
+
+Para usar `ssm:`, o `GraphQL` precisa ser criado com `cloud.SSMContext` nos recursos.
+
+### AWS Secrets Manager
+
+Formatos aceitos:
+
+```text
+secret:/nome/do/segredo
+secrets:/nome/do/segredo
+```
+
+Com tipo do segredo:
+
+```text
+secrets:/nome/do/segredo:json
+```
+
+Exemplo:
+
+```json
+{
+  "authorization": {
+    "require_token_sts": true,
+    "tokenService": {
+      "token_authorization_url": "env:STS_TOKEN_URL",
+      "Credentials": {
+        "client_id": "env:STS_CLIENT_ID",
+        "client_secret": "secrets:/graphql/dev/credentials:json"
+      }
+    }
+  }
+}
+```
+
+Para usar `secret:` ou `secrets:`, o `GraphQL` precisa ser criado com `cloud.SecretsManagerContext` nos recursos.
+
+### AWS S3
+
+Formato:
+
+```text
+s3:REGION:BUCKET:KEY
+```
+
+Exemplo:
+
+```json
+{
+  "schema": "s3:us-east-1:graphql-config:dev/schema.json",
+  "connectors": "s3:us-east-1:graphql-config:dev/connectors.json",
+  "mock": "s3:us-east-1:graphql-config:dev/mock.json"
+}
+```
+
+O objeto S3 deve conter o JSON da configuracao esperada.
+
+### AWS DynamoDB
+
+Formato:
+
+```text
+dynamodb:REGION:TABLE:KEY
+```
+
+Com nomes customizados de atributos:
+
+```text
+dynamodb:REGION:TABLE:KEY:KEY_ATTRIBUTE:VALUE_ATTRIBUTE
+```
+
+Exemplo:
+
+```json
+{
+  "schema": "dynamodb:us-east-1:graphql-config:schema",
+  "connectors": "dynamodb:us-east-1:graphql-config:connectors:configKey:payload"
+}
+```
+
+Por padrao, o item e buscado por `id = KEY` e o valor da configuracao e lido do atributo `value`. Se `VALUE_ATTRIBUTE` nao existir, o item inteiro e serializado como JSON.
+
+## Schema
+
+O schema e definido por JSON e convertido em tipos GraphQL.
+
+Exemplo reduzido:
+
+```json
+{
+  "types": [
+    {
+      "name": "Convenio",
+      "fields": [
+        { "name": "codigoConvenio", "type": "Int" },
+        { "name": "nomeConvenio", "type": "String" }
+      ]
+    },
+    {
+      "name": "CombinedData",
+      "fields": [
+        { "name": "convenio", "type": "Object", "ofType": "Convenio" }
+      ]
+    }
+  ],
+  "query": {
+    "name": "Query",
+    "fields": [
+      {
+        "name": "dataSources",
+        "type": "Object",
+        "ofType": "CombinedData",
+        "args": [
+          { "name": "codigoConvenio", "type": "NonNull", "ofType": "Int" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Tipos suportados:
+
+- `Int`
+- `Boolean`
+- `Float`
+- `String`
+- `List`, usando `ofType`
+- `Object`, usando `ofType`
+- `NonNull`, usando `ofType`
+
+## Conectores
+
+Cada campo solicitado dentro da query principal e associado a um conector pelo nome do campo.
+
+Exemplo:
+
+```json
+{
+  "connectors": [
+    {
+      "field": "convenio",
+      "adapter": "redis",
+      "adapterConfig": {
+        "endpoint": "localhost:6379",
+        "password": ""
+      },
+      "keyPattern": "CVN_{codigoConvenio}",
+      "timeoutMs": 500,
+      "retries": 1,
+      "optional": false
+    }
+  ]
+}
+```
+
+Campos:
+
+- `field`: campo GraphQL resolvido pelo conector.
+- `adapter`: origem dos dados. Valores atuais: `redis`, `rest`, `dynamodb`, `s3`, `rds`.
+- `adapterConfig`: configuracao especifica do adapter.
+- `keyPattern`: template usado para montar a chave, path ou endpoint.
+- `timeoutMs`: timeout por tentativa do conector.
+- `retries`: numero de novas tentativas apos falha.
+- `optional`: quando `true`, uma falha nesse conector nao derruba a consulta inteira.
+
+### Templates Dinamicos
+
+Qualquer argumento da query pode ser usado no `keyPattern`.
+
+Query:
+
+```graphql
+query {
+  dataSources(codigoConvenio: 10341) {
+    convenio {
+      nomeConvenio
+    }
+  }
+}
+```
+
+Conector:
+
+```json
+{
+  "field": "convenio",
+  "adapter": "redis",
+  "adapterConfig": {
+    "endpoint": "localhost:6379"
+  },
+  "keyPattern": "CVN_{codigoConvenio}"
+}
+```
+
+Chave final:
+
+```text
+CVN_10341
+```
+
+## Adapters
+
+### Redis
+
+```json
+{
+  "field": "convenio",
+  "adapter": "redis",
+  "adapterConfig": {
+    "endpoint": "localhost:6379",
+    "password": ""
+  },
+  "keyPattern": "CVN_{codigoConvenio}"
+}
+```
+
+O valor recuperado do Redis deve ser JSON e sera convertido para `map[string]interface{}`.
+
+### REST
+
+```json
+{
+  "field": "convenio",
+  "adapter": "rest",
+  "adapterConfig": {
+    "baseUrl": "https://api.exemplo.com",
+    "endpoint": "/convenios/{codigoConvenio}",
+    "method": "GET",
+    "headers": {
+      "Accept": "application/json"
+    }
+  }
+}
+```
+
+Para REST, se `keyPattern` nao for informado, o conector usa `adapterConfig.endpoint`.
+
+### DynamoDB
+
+```json
+{
+  "field": "convenio",
+  "adapter": "dynamodb",
+  "adapterConfig": {
+    "region": "us-east-1",
+    "table": "convenios",
+    "accessKeyId": "local",
+    "secretAccessKey": "local"
+  },
+  "keyPattern": "CVN_{codigoConvenio}"
+}
+```
+
+O adapter busca o item usando a chave `id` com o valor gerado por `keyPattern`.
+
+### S3
+
+```json
+{
+  "field": "taxaFunding",
+  "adapter": "s3",
+  "adapterConfig": {
+    "region": "us-east-1",
+    "bucket": "bucket-configuracoes",
+    "accessKeyId": "local",
+    "secretAccessKey": "local"
+  },
+  "keyPattern": "funding/{codigoConvenio}.json"
+}
+```
+
+O objeto S3 deve conter JSON.
+
+### RDS
+
+```json
+{
+  "field": "convenio",
+  "adapter": "rds",
+  "adapterConfig": {
+    "driverName": "postgres",
+    "dsn": "postgres://user:pass@host:5432/dbname?sslmode=require",
+    "resultMode": "one"
+  },
+  "keyPattern": "select codigo_convenio as \"codigoConvenio\", nome_convenio as \"nomeConvenio\" from convenio where codigo_convenio = {codigoConvenio}"
+}
+```
+
+Campos do `adapterConfig`:
+
+- `driverName`: nome do driver SQL. Drivers registrados atualmente: `postgres` e `mysql`.
+- `dsn`: string de conexao do banco.
+- `resultMode`: `one` para retornar a primeira linha como objeto, ou `many` para retornar `{ "items": [...] }`.
+
+Para MySQL:
+
+```json
+{
+  "field": "convenios",
+  "adapter": "rds",
+  "adapterConfig": {
+    "driverName": "mysql",
+    "dsn": "user:pass@tcp(host:3306)/dbname?parseTime=true",
+    "resultMode": "many"
+  },
+  "keyPattern": "select codigo_convenio as codigoConvenio, nome_convenio as nomeConvenio from convenio where segmento = '{segmento}'"
+}
+```
+
+Observacao: o `keyPattern` do RDS e executado como SQL apos interpolacao dos argumentos. Em ambientes produtivos, prefira limitar os argumentos expostos no schema e usar fontes confiaveis de configuracao para reduzir risco de injecao.
+
+## Mock
+
+O mock permite testar sem acessar Redis, REST, DynamoDB ou S3.
+
+Exemplo:
+
+```json
+{
+  "status": true,
+  "values": {
+    "10341": {
+      "convenio": {
+        "codigoConvenio": 10341,
+        "nomeConvenio": "Convenio de Credito Servidores Estaduais"
+      },
+      "limiteOperacional": {
+        "percentualMaximoMargemConsignavel": 0.35
+      },
+      "taxaFunding": {
+        "dataFunding": "2025-04-11"
+      }
+    }
+  }
+}
+```
+
+Com `status: true`, o resolver tenta retornar os dados do mock antes de consultar o conector real.
+
+## Uso em Go
+
+### Criando a API
+
+```go
+resources := &cloud.CloudContextList{
+    cloud.SSMContext,
+    cloud.SecretsManagerContext,
+}
+
+config, err := graphql.LoadConfig("examples/config/service.json")
+if err != nil {
+    panic(err)
+}
+
+api, err := graphql.New(config, resources, "us-east-1", "http://localhost:4566")
+if err != nil {
+    panic(err)
+}
+```
+
+### Handler HTTP Local
+
+```go
+wrappedHandler := api.NewHandler(config.Pretty)
+
+http.Handle(api.Config.Route, wrappedHandler)
+log.Fatal(http.ListenAndServe(":8080", nil))
+```
+
+### AWS ALB
+
+```go
+wrappedHandler := api.NewHandler(config.Pretty)
+adapter := graphql.WrapHandler(wrappedHandler).ToALB()
+
+func requestHandler(ctx context.Context, req events.ALBTargetGroupRequest) (events.ALBTargetGroupResponse, error) {
+    return adapter.ProxyWithContext(ctx, req)
+}
+```
+
+### API Gateway v1
+
+```go
+adapter := graphql.WrapHandler(wrappedHandler).ToAPIGateway()
+```
+
+### API Gateway v2
+
+```go
+adapter := graphql.WrapHandler(wrappedHandler).ToAPIGatewayV2()
+```
+
+## Funcoes Publicas Principais
+
+### `graphql.LoadConfig(path string) (*graphql.Config, error)`
+
+Carrega um arquivo JSON de configuracao e resolve paths locais relativos ao diretorio do arquivo.
+
+```go
+config, err := graphql.LoadConfig("examples/config/service.json")
+```
+
+### `graphql.New(config, resources, region, endpoint) (*graphql.GraphQL, error)`
+
+Cria o contexto cloud, carrega conectores, cria resolver, monta schema e configura autorizacao quando habilitada.
+
+```go
+api, err := graphql.New(config, resources, "us-east-1", "http://localhost:4566")
+```
+
+### `(*GraphQL).NewHandler(pretty bool, middlewares ...graphql.Middleware) http.Handler`
+
+Cria o handler GraphQL. O middleware de tempo de execucao e aplicado automaticamente.
+
+```go
+handler := api.NewHandler(true)
+```
+
+### `graphql.WrapHandler(h http.Handler)`
+
+Empacota um `http.Handler` para conversao em adapters AWS.
+
+```go
+adapter := graphql.WrapHandler(handler).ToALB()
+```
+
+### `graphql.FromString(value string) *graphql.Path`
+
+Converte um path inline em uma estrutura de captura.
+
+```go
+path := graphql.FromString("ssm:/graphql/dev/schema:false")
+value, err := path.GetValue(cloudContext)
+```
+
+### `graphql.IsPath(value string) bool`
+
+Indica se uma string usa algum prefixo de captura suportado.
+
+```go
+ok := graphql.IsPath("local:schema.json")
+```
+
+## Headers de Resposta
+
+Toda resposta GraphQL criada com `api.NewHandler(...)` recebe:
+
+```http
+x-graphql-elapsed-time: 4
+```
+
+O valor e o tempo total de processamento da requisicao em milissegundos.
+
+## Validacao
+
+Execute:
+
+```bash
+go test ./...
+```
+
+Para checar concorrencia nos pacotes principais:
+
+```bash
+go test -race ./internal/graph ./internal/graph/connectors ./graphql
+```
