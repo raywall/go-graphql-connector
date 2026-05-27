@@ -64,6 +64,32 @@ x-graphql-elapsed-time: 3
 
 O valor representa milissegundos e retorna apenas o numero.
 
+## Execucao no workspace integrado
+
+Quando usado junto com `routing-slip-pattern` e `custom-business-metrics`, o conector pode ser iniciado pela stack local da raiz de `workflows`.
+
+Modo com containers separados:
+
+```bash
+cd /Users/raysouz/Workspace/estudos/workflows
+make prepare
+```
+
+Modo compacto, util para testes rapidos:
+
+```bash
+cd /Users/raysouz/Workspace/estudos/workflows
+make run-compact
+```
+
+Nos dois modos, o endpoint GraphQL fica disponivel em:
+
+```text
+http://localhost:8090/graphql
+```
+
+O modo compacto executa os tres projetos principais em um unico container e usa o exemplo local do conector. Para validar dependencias externas com maior isolamento, prefira a stack padrao com containers separados.
+
 ## Exemplo com Configuracao no DynamoDB, Dados no Redis e API REST
 
 O projeto tambem possui um exemplo em `examples/dynamodb` que carrega `schema` e `connectors` a partir de uma tabela DynamoDB. Nesse exemplo, o DynamoDB e usado apenas como origem de configuracao; os dados consultados pela GraphQL API vêm de Redis e de uma API HTTP.
