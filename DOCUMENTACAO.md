@@ -944,3 +944,30 @@ Regras de seguranca:
 - preservar propagacao de `traceparent`, `X-Trace-ID` e `X-Correlation-ID` nas chamadas diagnosticas.
 
 Nesta fase, o contrato fica documentado para alinhar o Studio, agentes e proximas implementacoes. A execucao real das tools administrativas deve respeitar as mesmas politicas de resiliência, token gerenciado e redaction ja existentes no conector.
+
+## Planner MCP e Integracoes GraphQL
+
+A Fase 6 adiciona um planner assistido por MCP no `routing-slip-pattern`. Quando o planner identifica enriquecimento, consulta a API ou necessidade de compor dados externos, ele pode sugerir steps `graphql_enrich` ou `rest_call`.
+
+Para o `go-graphql-connector`, isso significa que a configuracao de connectors deve continuar explicita e auditavel. O planner pode gerar um rascunho de step, mas a query, variaveis, `target` e `result_path` devem ser revisados antes da execucao.
+
+Exemplo de saida esperada pelo planner:
+
+```yaml
+- id: carregar-contexto
+  name: graphql_enrich
+  params:
+    endpoint: http://go-graphql-connector:8090/graphql
+    query: "query { dataSources { status } }"
+    result_path: dataSources
+    target: contexto
+    required: true
+```
+
+Recomendacoes:
+
+- validar a query com `validate_config` ou consulta manual antes de usar em producao;
+- manter `timeoutMs`, `retries` e circuit breaker nos connectors envolvidos;
+- revisar tokens, certificados e redaction;
+- preferir consultas sem side effect para etapas de enriquecimento;
+- documentar quais campos enriquecidos entram no payload persistido do workflow.
