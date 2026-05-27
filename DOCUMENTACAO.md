@@ -656,7 +656,7 @@ adapter := graphql.WrapHandler(wrappedHandler).ToAPIGatewayV2()
 
 ## Preparacao Tecnica e Feature Flags
 
-A Fase 0 adiciona uma base de configuracao para ativar capacidades evolutivas sem mudar o contrato principal do conector.
+O conector possui uma base de configuracao para ativar capacidades operacionais sem mudar o contrato principal de consulta. Essa camada concentra flags de rastreabilidade, resiliencia, MCP e mascaramento de dados sensiveis.
 
 Exemplo:
 
@@ -778,7 +778,7 @@ O header `x-graphql-elapsed-time` informa o tempo total de processamento da requ
 
 ## Rastreabilidade Distribuida
 
-A Fase 1 da evolucao do ecossistema adiciona rastreabilidade distribuida ao conector. O objetivo e permitir que uma chamada originada no `routing-slip-pattern` continue identificavel dentro do GraphQL connector e nas APIs consultadas por ele.
+O conector suporta rastreabilidade distribuida para que uma chamada originada no `routing-slip-pattern` continue identificavel dentro do GraphQL connector e nas APIs consultadas por ele.
 
 Fluxo:
 
@@ -816,7 +816,7 @@ curl --request POST \
 
 ## Resiliencia por Connector
 
-A Fase 3 adiciona resiliência configurável por connector. O objetivo é lidar com falhas transitórias de APIs, timeouts e instabilidade sem jogar essa responsabilidade para o workflow.
+A resiliencia configuravel por connector permite lidar com falhas transitorias de APIs, timeouts e instabilidade sem jogar essa responsabilidade para o workflow.
 
 Exemplo:
 
@@ -894,7 +894,7 @@ go test -race ./internal/graph ./internal/graph/connectors ./graphql
 
 ## Integracao com State Store do Routing Slip
 
-A Fase 4 do ecossistema adiciona persistencia robusta de estado no `routing-slip-pattern`. O `go-graphql-connector` nao precisa persistir snapshots do workflow, mas passa a participar desse desenho como fonte de enriquecimento reexecutavel e rastreavel.
+O state store persistente do `routing-slip-pattern` guarda snapshots de execucao e permite retomar workflows a partir do ponto salvo. O `go-graphql-connector` nao precisa persistir snapshots do workflow, mas participa desse desenho como fonte de enriquecimento reexecutavel e rastreavel.
 
 Quando um step `graphql_enrich` consulta o conector, o resultado enriquecido e salvo dentro do snapshot do workflow. Se a execucao falhar depois da consulta, o reprocessamento pode continuar a partir do cursor salvo sem repetir etapas anteriores ja concluidas. Caso o cursor volte manualmente para uma etapa ja marcada como `success`, a idempotencia do runtime pode registrar `idempotent_skip` e seguir o fluxo.
 
@@ -919,9 +919,9 @@ Exemplo de step:
 
 O snapshot persistido pelo workflow guarda o payload apos esse enriquecimento, junto com cursor, historico, `trace_id` e estado granular da etapa.
 
-## MCP Admin Foundation
+## MCP Admin
 
-A Fase 5 define a fundacao MCP para que o `go-graphql-connector` exponha capacidades administrativas sem vazar segredos ou acoplar o Studio diretamente aos arquivos de configuracao.
+O MCP Admin define uma camada para expor capacidades administrativas do `go-graphql-connector` sem vazar segredos ou acoplar o Studio diretamente aos arquivos de configuracao.
 
 Tools previstas para o MCP Admin:
 
@@ -943,11 +943,11 @@ Regras de seguranca:
 - manter tools de execucao desativaveis em producao;
 - preservar propagacao de `traceparent`, `X-Trace-ID` e `X-Correlation-ID` nas chamadas diagnosticas.
 
-Nesta fase, o contrato fica documentado para alinhar o Studio, agentes e proximas implementacoes. A execucao real das tools administrativas deve respeitar as mesmas politicas de resiliência, token gerenciado e redaction ja existentes no conector.
+O contrato deve alinhar Studio, agentes e automacoes de suporte. A execucao real das tools administrativas deve respeitar as mesmas politicas de resiliencia, token gerenciado e redaction ja existentes no conector.
 
 ## Planner MCP e Integracoes GraphQL
 
-A Fase 6 adiciona um planner assistido por MCP no `routing-slip-pattern`. Quando o planner identifica enriquecimento, consulta a API ou necessidade de compor dados externos, ele pode sugerir steps `graphql_enrich` ou `rest_call`.
+O planner assistido por MCP do `routing-slip-pattern` pode sugerir steps `graphql_enrich` ou `rest_call` quando identifica enriquecimento, consulta a API ou necessidade de compor dados externos.
 
 Para o `go-graphql-connector`, isso significa que a configuracao de connectors deve continuar explicita e auditavel. O planner pode gerar um rascunho de step, mas a query, variaveis, `target` e `result_path` devem ser revisados antes da execucao.
 
