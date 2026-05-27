@@ -891,3 +891,30 @@ Para checar concorrencia nos pacotes principais:
 ```bash
 go test -race ./internal/graph ./internal/graph/connectors ./graphql
 ```
+
+## Integracao com State Store do Routing Slip
+
+A Fase 4 do ecossistema adiciona persistencia robusta de estado no `routing-slip-pattern`. O `go-graphql-connector` nao precisa persistir snapshots do workflow, mas passa a participar desse desenho como fonte de enriquecimento reexecutavel e rastreavel.
+
+Quando um step `graphql_enrich` consulta o conector, o resultado enriquecido e salvo dentro do snapshot do workflow. Se a execucao falhar depois da consulta, o reprocessamento pode continuar a partir do cursor salvo sem repetir etapas anteriores ja concluidas. Caso o cursor volte manualmente para uma etapa ja marcada como `success`, a idempotencia do runtime pode registrar `idempotent_skip` e seguir o fluxo.
+
+Boas praticas para usar o conector com state store:
+
+- propagar `traceparent`, `X-Trace-ID` e `X-Correlation-ID` nas chamadas;
+- manter `timeoutMs`, `retries` e circuit breaker configurados em connectors que consultam APIs externas;
+- usar respostas deterministicas quando o enriquecimento sera reutilizado apos reprocessamento;
+- evitar side effects em connectors de leitura, deixando efeitos externos para handlers explicitos do workflow.
+
+Exemplo de step:
+
+```yaml
+- id: carregar-produto
+  name: graphql_enrich
+  params:
+    endpoint: http://go-graphql-connector:8090/graphql
+    target: catalogo
+    result_path: dataSources
+    required: true
+```
+
+O snapshot persistido pelo workflow guarda o payload apos esse enriquecimento, junto com cursor, historico, `trace_id` e estado granular da etapa.
