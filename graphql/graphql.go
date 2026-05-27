@@ -7,6 +7,7 @@ import (
 	"github.com/raywall/cloud-easy-connector/pkg/cloud"
 	"github.com/raywall/go-graphql-connector/internal/adapters"
 	"github.com/raywall/go-graphql-connector/internal/graph"
+	"github.com/raywall/go-graphql-connector/internal/graph/connectors"
 )
 
 // route is the API route name that will be used by default
@@ -115,4 +116,13 @@ func New(config *Config, resources *cloud.CloudContextList, region, endpoint str
 	}
 
 	return &api, nil
+}
+
+// ConnectorCircuitStates returns the current diagnostic state of each connector
+// circuit breaker.
+func (g *GraphQL) ConnectorCircuitStates() map[string]connectors.CircuitState {
+	if g == nil || g.Resolver == nil {
+		return map[string]connectors.CircuitState{}
+	}
+	return (*g.Resolver).ConnectorCircuitStates()
 }

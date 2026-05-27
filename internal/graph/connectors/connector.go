@@ -21,6 +21,7 @@ type ConnectorConfig struct {
 	AdapterConfig     map[string]interface{}  `json:"adapterConfig"`
 	KeyPattern        string                  `json:"keyPattern"`
 	ResponseTransform ResponseTransformConfig `json:"responseTransform,omitempty"`
+	Resilience        ResilienceConfig        `json:"resilience,omitempty"`
 	Optional          bool                    `json:"optional,omitempty"`
 	TimeoutMS         int                     `json:"timeoutMs,omitempty"`
 	Retries           int                     `json:"retries,omitempty"`
@@ -44,6 +45,7 @@ type Connector interface {
 	Field() string
 	GetData(ctx context.Context, args map[string]interface{}) (interface{}, error)
 	Optional() bool
+	CircuitState() CircuitState
 }
 
 type connector struct {
@@ -54,6 +56,8 @@ type connector struct {
 	optional          bool
 	timeout           time.Duration
 	retries           int
+	resilience        ResilienceConfig
+	circuit           *circuitBreaker
 }
 
 func NewConnector(config ConnectorConfig) (Connector, error) {
@@ -141,6 +145,8 @@ func NewConnectorWithOptions(config ConnectorConfig, options Options) (Connector
 		optional:          config.Optional,
 		timeout:           timeout,
 		retries:           config.Retries,
+		resilience:        config.Resilience,
+		circuit:           newCircuitBreaker(config.Resilience.CircuitBreaker),
 	}, nil
 }
 
@@ -152,9 +158,16 @@ func (c *connector) Optional() bool {
 	return c.optional
 }
 
+func (c *connector) CircuitState() CircuitState {
+	return c.circuit.state(time.Now())
+}
+
 func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 	key, err := renderTemplate(c.keyPattern, args)
 	if err != nil {
+		return nil, err
+	}
+	if err := c.circuit.allow(c.field, time.Now()); err != nil {
 		return nil, err
 	}
 	ctx, trace := tracing.Child(ctx)
@@ -165,14 +178,31 @@ func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (i
 		attribute.String("connector.trace_id", trace.TraceID),
 		attribute.String("connector.span_id", trace.SpanID),
 		attribute.Int("connector.retries", c.retries),
+		attribute.Bool("connector.circuit_breaker.enabled", c.CircuitState().Enabled),
 	)
 	defer span.End()
 
 	var lastErr error
 	for attempt := 0; attempt <= c.retries; attempt++ {
 		span.SetAttributes(attribute.Int("connector.attempt", attempt+1))
+		if attempt > 0 {
+			delay := c.resilience.backoffDuration(attempt)
+			span.SetAttributes(attribute.Int64("connector.backoff_ms", delay.Milliseconds()))
+			if delay > 0 {
+				timer := time.NewTimer(delay)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return nil, ctx.Err()
+				case <-timer.C:
+				}
+			}
+		}
 		callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 		data, err := c.adapter.GetData(callCtx, key)
+		if err == nil && callCtx.Err() != nil {
+			err = callCtx.Err()
+		}
 		cancel()
 		if err == nil {
 			value, transformErr := applyResponseTransform(data, c.responseTransform)
@@ -181,17 +211,21 @@ func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (i
 				span.SetStatus(codes.Error, transformErr.Error())
 				return nil, transformErr
 			}
+			c.circuit.recordSuccess()
 			span.SetStatus(codes.Ok, "")
 			return value, nil
 		}
 		span.RecordError(err)
+		class := classifyConnectorError(err)
+		span.SetAttributes(attribute.String("connector.error_class", class))
 		lastErr = err
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || !retryableConnectorError(class) {
 			break
 		}
 	}
 
 	if lastErr != nil {
+		c.circuit.recordFailure(time.Now())
 		span.SetStatus(codes.Error, lastErr.Error())
 	}
 	return nil, lastErr

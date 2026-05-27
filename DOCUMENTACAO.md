@@ -665,7 +665,7 @@ Exemplo:
   "features": {
     "tracing_enabled": true,
     "mcp_enabled": false,
-    "resilience_enabled": false
+    "resilience_enabled": true
   },
   "security": {
     "redaction": {
@@ -689,7 +689,7 @@ Exemplo:
 |---|---:|---|
 | `features.tracing_enabled` | `true` | Controla o middleware de trace aplicado pelo `NewHandler`. |
 | `features.mcp_enabled` | `false` | Reserva para o MCP Admin Server. |
-| `features.resilience_enabled` | `false` | Reserva para retry/backoff/circuit breaker padronizados. |
+| `features.resilience_enabled` | `true` | Indica uso de retry/backoff/circuit breaker padronizados nos connectors configurados. |
 | `security.redaction.enabled` | `true` | Indica que dados sensíveis devem ser mascarados em logs e diagnósticos. |
 
 O adapter REST já mascara tokens em logs. O token continua sendo usado no header `Authorization`, mas não é impresso integralmente.
@@ -813,6 +813,70 @@ curl --request POST \
   --header 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
   --data '{"query":"query { dataSources(id: \"PED-1001\") { order { id status } } }"}'
 ```
+
+## Resiliencia por Connector
+
+A Fase 3 adiciona resiliência configurável por connector. O objetivo é lidar com falhas transitórias de APIs, timeouts e instabilidade sem jogar essa responsabilidade para o workflow.
+
+Exemplo:
+
+```json
+{
+  "field": "order",
+  "adapter": "rest",
+  "adapterConfig": {
+    "baseUrl": "https://mock.raysouz.studio",
+    "endpoint": "/orders/{id}",
+    "method": "GET"
+  },
+  "keyPattern": "/orders/{id}",
+  "timeoutMs": 1500,
+  "retries": 2,
+  "resilience": {
+    "backoff": "exponential",
+    "initial_interval_ms": 100,
+    "max_interval_ms": 1000,
+    "jitter": true,
+    "circuit_breaker": {
+      "enabled": true,
+      "failure_threshold": 5,
+      "open_timeout_ms": 30000
+    }
+  }
+}
+```
+
+Campos principais:
+
+| Campo | Uso |
+|---|---|
+| `timeoutMs` | Timeout por tentativa do connector. |
+| `retries` | Quantidade de novas tentativas após a primeira chamada. |
+| `resilience.backoff` | `exponential`, `fixed` ou `none`. |
+| `resilience.initial_interval_ms` | Espera inicial entre tentativas. |
+| `resilience.max_interval_ms` | Limite máximo do backoff. |
+| `resilience.jitter` | Adiciona variação ao backoff para evitar rajadas. |
+| `resilience.circuit_breaker.enabled` | Liga o circuit breaker do connector. |
+| `resilience.circuit_breaker.failure_threshold` | Falhas consecutivas necessárias para abrir o circuito. |
+| `resilience.circuit_breaker.open_timeout_ms` | Tempo em que o circuito permanece aberto. |
+
+Classificação de erros:
+
+| Classe | Quando ocorre | Retry? |
+|---|---|---|
+| `retryable` | Erros transitórios genéricos. | Sim |
+| `timeout` | Deadline ou timeout da chamada. | Sim |
+| `auth_error` | Erros de autenticação/autorização. | Não |
+| `non_retryable` | Configuração inválida, argumento ausente ou erro funcional da resposta. | Não |
+| `circuit_open` | Circuit breaker aberto. | Não |
+
+O estado do circuit breaker fica disponível programaticamente:
+
+```go
+states := api.ConnectorCircuitStates()
+```
+
+Cada chamada de connector também registra atributos de span como `connector.field`, `connector.attempt`, `connector.retries`, `connector.error_class` e `connector.circuit_breaker.enabled`.
 
 ## Validacao
 
