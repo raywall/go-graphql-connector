@@ -5,6 +5,11 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/raywall/go-graphql-connector/internal/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -65,8 +70,23 @@ func Logging(next http.Handler) http.Handler {
 
 func Tracing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Add tracing logic here (e.g., extract/propagate trace context)
-		// Example: traceID := r.Header.Get("X-Trace-ID")
-		next.ServeHTTP(w, r)
+		trace, ok := tracing.FromHeaders(r.Header)
+		if !ok {
+			_, trace = tracing.Ensure(r.Context())
+		}
+		ctx := tracing.WithContext(r.Context(), trace)
+		tracer := otel.Tracer("go-graphql-connector/http")
+		ctx, span := tracer.Start(ctx, "graphql.request")
+		span.SetAttributes(
+			attribute.String("graphql.route", r.URL.Path),
+			attribute.String("http.method", r.Method),
+			attribute.String("graphql.trace_id", trace.TraceID),
+			attribute.String("graphql.span_id", trace.SpanID),
+		)
+		defer span.End()
+		w.Header().Set("X-Trace-ID", trace.TraceID)
+		w.Header().Set("traceparent", tracing.Traceparent(trace))
+		next.ServeHTTP(w, r.WithContext(ctx))
+		span.SetStatus(codes.Ok, "")
 	})
 }

@@ -45,6 +45,25 @@ type Authorization struct {
 	TokenService TokenService `json:"tokenService"`
 }
 
+// FeatureFlags controls optional platform capabilities without changing the
+// connector contract.
+type FeatureFlags struct {
+	TracingEnabled    *bool `json:"tracing_enabled,omitempty"`
+	MCPEnabled        bool  `json:"mcp_enabled,omitempty"`
+	ResilienceEnabled bool  `json:"resilience_enabled,omitempty"`
+}
+
+// Security contains operational safety settings.
+type Security struct {
+	Redaction Redaction `json:"redaction,omitempty"`
+}
+
+// Redaction controls fields that must not be exposed in logs or diagnostics.
+type Redaction struct {
+	Enabled bool     `json:"enabled,omitempty"`
+	Fields  []string `json:"fields,omitempty"`
+}
+
 // Config contains all the configuration required to create and instantiate a dynamic GraphQL API
 type Config struct {
 	// Schema is the content or path to retrieve the schema settings of the GraphQL API that will be
@@ -70,6 +89,12 @@ type Config struct {
 	// AllowPartial allows connector failures to return nil fields instead of failing the whole query.
 	AllowPartial bool `json:"allow_partial"`
 
+	// Features controls optional platform capabilities.
+	Features FeatureFlags `json:"features,omitempty"`
+
+	// Security controls diagnostics and secret redaction.
+	Security Security `json:"security,omitempty"`
+
 	// Authorization contains the authorization settings to be used by GraphQL API connectors
 	Authorization Authorization `json:"authorization"`
 
@@ -88,6 +113,7 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse GraphQL config: %v", err)
 	}
 	config.resolveLocalPaths(filepath.Dir(path))
+	config.applyDefaults()
 
 	return &config, config.Validate()
 }
@@ -106,6 +132,17 @@ func (c *Config) resolveLocalPaths(baseDir string) {
 	c.Schema = resolveLocalPath(baseDir, c.Schema)
 	c.Connectors = resolveLocalPath(baseDir, c.Connectors)
 	c.Mock = resolveLocalPath(baseDir, c.Mock)
+}
+
+func (c *Config) applyDefaults() {
+	if c.Features.TracingEnabled == nil {
+		enabled := true
+		c.Features.TracingEnabled = &enabled
+	}
+	if !c.Security.Redaction.Enabled && len(c.Security.Redaction.Fields) == 0 {
+		c.Security.Redaction.Enabled = true
+		c.Security.Redaction.Fields = []string{"authorization", "client_secret", "access_token", "refresh_token", "password", "token", "api_key", "x-api-key"}
+	}
 }
 
 func resolveLocalPath(baseDir, value string) string {

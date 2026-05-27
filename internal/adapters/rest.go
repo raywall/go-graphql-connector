@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"reflect"
 	"time"
+
+	"github.com/raywall/go-graphql-connector/internal/tracing"
 )
 
 type RestAdapter struct {
@@ -76,12 +78,13 @@ func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]inter
 	for name, value := range r.headers {
 		req.Header.Set(name, value)
 	}
+	tracing.Inject(req)
 	if r.tokenProvider != nil && req.Header.Get("Authorization") == "" {
 		token, err := r.tokenProvider.GetToken()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get STS token for REST API %s: %v", url, err)
 		}
-		log.Printf("Using token from provider for REST API %s: %s", url, token)
+		log.Printf("Using token from provider for REST API %s: %s", url, maskSecret(token))
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
@@ -105,4 +108,11 @@ func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]inter
 		return nil, fmt.Errorf("failed to decode REST API response: %v", err)
 	}
 	return data, nil
+}
+
+func maskSecret(value string) string {
+	if len(value) <= 8 {
+		return "***"
+	}
+	return value[:4] + "***" + value[len(value)-4:]
 }

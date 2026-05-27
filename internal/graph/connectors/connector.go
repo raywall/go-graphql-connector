@@ -9,6 +9,10 @@ import (
 	"time"
 
 	"github.com/raywall/go-graphql-connector/internal/adapters"
+	"github.com/raywall/go-graphql-connector/internal/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type ConnectorConfig struct {
@@ -153,21 +157,43 @@ func (c *connector) GetData(ctx context.Context, args map[string]interface{}) (i
 	if err != nil {
 		return nil, err
 	}
+	ctx, trace := tracing.Child(ctx)
+	tracer := otel.Tracer("go-graphql-connector/connectors")
+	ctx, span := tracer.Start(ctx, "connector."+c.field)
+	span.SetAttributes(
+		attribute.String("connector.field", c.field),
+		attribute.String("connector.trace_id", trace.TraceID),
+		attribute.String("connector.span_id", trace.SpanID),
+		attribute.Int("connector.retries", c.retries),
+	)
+	defer span.End()
 
 	var lastErr error
 	for attempt := 0; attempt <= c.retries; attempt++ {
+		span.SetAttributes(attribute.Int("connector.attempt", attempt+1))
 		callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 		data, err := c.adapter.GetData(callCtx, key)
 		cancel()
 		if err == nil {
-			return applyResponseTransform(data, c.responseTransform)
+			value, transformErr := applyResponseTransform(data, c.responseTransform)
+			if transformErr != nil {
+				span.RecordError(transformErr)
+				span.SetStatus(codes.Error, transformErr.Error())
+				return nil, transformErr
+			}
+			span.SetStatus(codes.Ok, "")
+			return value, nil
 		}
+		span.RecordError(err)
 		lastErr = err
 		if ctx.Err() != nil {
 			break
 		}
 	}
 
+	if lastErr != nil {
+		span.SetStatus(codes.Error, lastErr.Error())
+	}
 	return nil, lastErr
 }
 

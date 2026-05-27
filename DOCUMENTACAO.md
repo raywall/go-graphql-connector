@@ -654,6 +654,46 @@ adapter := graphql.WrapHandler(wrappedHandler).ToAPIGatewayV2()
 
 ## Funcoes Publicas Principais
 
+## Preparacao Tecnica e Feature Flags
+
+A Fase 0 adiciona uma base de configuracao para ativar capacidades evolutivas sem mudar o contrato principal do conector.
+
+Exemplo:
+
+```json
+{
+  "features": {
+    "tracing_enabled": true,
+    "mcp_enabled": false,
+    "resilience_enabled": false
+  },
+  "security": {
+    "redaction": {
+      "enabled": true,
+      "fields": [
+        "authorization",
+        "client_secret",
+        "access_token",
+        "refresh_token",
+        "password",
+        "token",
+        "api_key",
+        "x-api-key"
+      ]
+    }
+  }
+}
+```
+
+| Campo | Padrão | Uso |
+|---|---:|---|
+| `features.tracing_enabled` | `true` | Controla o middleware de trace aplicado pelo `NewHandler`. |
+| `features.mcp_enabled` | `false` | Reserva para o MCP Admin Server. |
+| `features.resilience_enabled` | `false` | Reserva para retry/backoff/circuit breaker padronizados. |
+| `security.redaction.enabled` | `true` | Indica que dados sensíveis devem ser mascarados em logs e diagnósticos. |
+
+O adapter REST já mascara tokens em logs. O token continua sendo usado no header `Authorization`, mas não é impresso integralmente.
+
 ### `graphql.LoadConfig(path string) (*graphql.Config, error)`
 
 Carrega um arquivo JSON de configuracao e resolve paths locais relativos ao diretorio do arquivo.
@@ -672,11 +712,32 @@ api, err := graphql.New(config, resources, "us-east-1", "http://localhost:4566")
 
 ### `(*GraphQL).NewHandler(pretty bool, middlewares ...graphql.Middleware) http.Handler`
 
-Cria o handler GraphQL. O middleware de tempo de execucao e aplicado automaticamente.
+Cria o handler GraphQL. Os middlewares de rastreabilidade e tempo de execucao sao aplicados automaticamente.
 
 ```go
 handler := api.NewHandler(true)
 ```
+
+O handler entende o header W3C `traceparent`. Quando a requisicao ja chega com esse header, o conector preserva o `trace_id` e usa esse contexto nas chamadas feitas pelos connectors. Quando a requisicao nao possui trace, o conector cria um novo identificador.
+
+Exemplo de requisicao:
+
+```http
+POST /graphql HTTP/1.1
+Content-Type: application/json
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+```
+
+Os adapters REST propagam os headers abaixo para as APIs integradas:
+
+```http
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-9f3a4c7b12e64010-01
+X-Trace-ID: 4bf92f3577b34da6a3ce929d0e0e4736
+X-Span-ID: 9f3a4c7b12e64010
+X-Parent-Span-ID: 00f067aa0ba902b7
+```
+
+Esse comportamento permite acompanhar uma consulta GraphQL do workflow ate a API externa consultada pelo connector.
 
 ### `graphql.WrapHandler(h http.Handler)`
 
@@ -709,9 +770,49 @@ Toda resposta GraphQL criada com `api.NewHandler(...)` recebe:
 
 ```http
 x-graphql-elapsed-time: 4
+X-Trace-ID: 4bf92f3577b34da6a3ce929d0e0e4736
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-O valor e o tempo total de processamento da requisicao em milissegundos.
+O header `x-graphql-elapsed-time` informa o tempo total de processamento da requisicao em milissegundos. Os headers `X-Trace-ID` e `traceparent` permitem correlacionar a chamada com o workflow, as APIs integradas e o `custom-business-metrics`.
+
+## Rastreabilidade Distribuida
+
+A Fase 1 da evolucao do ecossistema adiciona rastreabilidade distribuida ao conector. O objetivo e permitir que uma chamada originada no `routing-slip-pattern` continue identificavel dentro do GraphQL connector e nas APIs consultadas por ele.
+
+Fluxo:
+
+```mermaid
+sequenceDiagram
+    participant Workflow as routing-slip-pattern
+    participant GraphQL as go-graphql-connector
+    participant REST as API REST integrada
+
+    Workflow->>GraphQL: query GraphQL + traceparent
+    GraphQL->>GraphQL: preserva trace_id e cria contexto
+    GraphQL->>REST: connector REST + traceparent filho
+    REST-->>GraphQL: resposta da API
+    GraphQL-->>Workflow: resposta + X-Trace-ID
+```
+
+Pontos importantes:
+
+- o `trace_id` permanece o mesmo durante toda a jornada;
+- cada connector REST recebe um novo `span_id`;
+- o handler GraphQL e cada connector criam spans usando a API do OpenTelemetry;
+- o `traceparent` e propagado automaticamente pelo adapter REST;
+- CORS permite os headers `traceparent`, `X-Trace-ID`, `X-Span-ID` e `X-Parent-Span-ID`;
+- tokens STS continuam funcionando normalmente e nao sao expostos nos headers de rastreio.
+
+Exemplo de uso com `curl`:
+
+```bash
+curl --request POST \
+  --url http://localhost:8090/graphql \
+  --header 'content-type: application/json' \
+  --header 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
+  --data '{"query":"query { dataSources(id: \"PED-1001\") { order { id status } } }"}'
+```
 
 ## Validacao
 

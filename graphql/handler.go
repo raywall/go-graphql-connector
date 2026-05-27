@@ -21,7 +21,12 @@ func (g *GraphQL) NewHandler(pretty bool, middlewares ...Middleware) http.Handle
 		GraphiQL: g.Config.GraphiQL,
 	})
 
-	chain := append([]Middleware{middleware.ElapsedTime}, middlewares...)
+	chain := []Middleware{}
+	if g.Config.Features.TracingEnabled == nil || *g.Config.Features.TracingEnabled {
+		chain = append(chain, middleware.Tracing)
+	}
+	chain = append(chain, middleware.ElapsedTime)
+	chain = append(chain, middlewares...)
 	return middleware.Chain(h, chain...)
 }
 
