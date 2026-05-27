@@ -88,7 +88,35 @@ Nos dois modos, o endpoint GraphQL fica disponivel em:
 http://localhost:8090/graphql
 ```
 
-O modo compacto executa os tres projetos principais em um unico container e usa o exemplo local do conector. Para validar dependencias externas com maior isolamento, prefira a stack padrao com containers separados.
+O modo compacto executa os tres projetos principais em um unico container e usa o exemplo `ecommerce-distributed` do conector. Para validar dependencias externas com maior isolamento, prefira a stack padrao com containers separados.
+
+## Exemplo ecommerce-distributed
+
+O diretorio `examples/ecommerce-distributed` contem uma configuracao dedicada ao case distribuido de ecommerce usado pelo `routing-slip-pattern`.
+
+Ele expoe a query:
+
+```graphql
+query ($orderID: String!, $customerID: String!, $region: String!) {
+  dataSources(orderID: $orderID, customerID: $customerID, region: $region) {
+    order { id status total items { sku quantity } }
+    customer { id tier notification_channel }
+    inventory { sku available warehouse }
+    deliveryPolicy { region promise_days carriers { id name priority } }
+  }
+}
+```
+
+Connectors configurados:
+
+| Campo GraphQL | Origem REST |
+|---|---|
+| `order` | `/ecommerce/v1/orders/{orderID}` |
+| `customer` | `/ecommerce/v1/customers/{customerID}` |
+| `inventory` | `/ecommerce/v1/inventory/orders/{orderID}` |
+| `deliveryPolicy` | `/ecommerce/v1/delivery/policies/{region}` |
+
+O exemplo usa token STS mockado, `responseTransform`, retries e circuit breaker nos connectors que representam dependencias mais sensiveis.
 
 ## Exemplo com Configuracao no DynamoDB, Dados no Redis e API REST
 

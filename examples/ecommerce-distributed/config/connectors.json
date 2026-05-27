@@ -1,0 +1,102 @@
+{
+  "connectors": [
+    {
+      "field": "order",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/ecommerce/v1/orders/{orderID}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+        }
+      },
+      "responseTransform": {
+        "unwrapPath": "data",
+        "errorsPath": "errors",
+        "failOnErrors": true
+      },
+      "timeoutMs": 1500,
+      "retries": 2,
+      "resilience": {
+        "backoff": "exponential",
+        "initial_interval_ms": 100,
+        "max_interval_ms": 1000,
+        "jitter": true,
+        "circuit_breaker": {
+          "enabled": true,
+          "failure_threshold": 5,
+          "open_timeout_ms": 30000
+        }
+      }
+    },
+    {
+      "field": "customer",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/ecommerce/v1/customers/{customerID}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+        }
+      },
+      "responseTransform": {
+        "unwrapPath": "data",
+        "errorsPath": "errors",
+        "failOnErrors": true
+      },
+      "timeoutMs": 1500,
+      "retries": 1
+    },
+    {
+      "field": "inventory",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/ecommerce/v1/inventory/orders/{orderID}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+        }
+      },
+      "responseTransform": {
+        "unwrapPath": "data",
+        "errorsPath": "errors",
+        "failOnErrors": true
+      },
+      "timeoutMs": 1500,
+      "retries": 2,
+      "resilience": {
+        "backoff": "exponential",
+        "initial_interval_ms": 150,
+        "max_interval_ms": 1200,
+        "jitter": true,
+        "circuit_breaker": {
+          "enabled": true,
+          "failure_threshold": 4,
+          "open_timeout_ms": 30000
+        }
+      }
+    },
+    {
+      "field": "deliveryPolicy",
+      "adapter": "rest",
+      "adapterConfig": {
+        "baseUrl": "${EXTERNAL_API_URL}",
+        "endpoint": "/ecommerce/v1/delivery/policies/{region}",
+        "method": "GET",
+        "headers": {
+          "X-Serial-Number": "${EXTERNAL_API_SERIAL}"
+        }
+      },
+      "responseTransform": {
+        "unwrapPath": "data",
+        "errorsPath": "errors",
+        "failOnErrors": true
+      },
+      "timeoutMs": 1500,
+      "retries": 2
+    }
+  ]
+}
