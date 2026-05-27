@@ -918,3 +918,29 @@ Exemplo de step:
 ```
 
 O snapshot persistido pelo workflow guarda o payload apos esse enriquecimento, junto com cursor, historico, `trace_id` e estado granular da etapa.
+
+## MCP Admin Foundation
+
+A Fase 5 define a fundacao MCP para que o `go-graphql-connector` exponha capacidades administrativas sem vazar segredos ou acoplar o Studio diretamente aos arquivos de configuracao.
+
+Tools previstas para o MCP Admin:
+
+| Tool | Objetivo |
+|---|---|
+| `list_connectors` | Lista connectors configurados. |
+| `describe_connector` | Mostra adapter, timeout, resiliencia e schema esperado. |
+| `test_connector` | Testa um connector isoladamente com entrada controlada. |
+| `execute_graphql_query` | Executa uma query diagnostica controlada. |
+| `get_token_status` | Mostra status do token gerenciado sem retornar o token. |
+| `get_circuit_state` | Mostra estado dos circuit breakers por connector. |
+| `validate_config` | Valida `schema.json`, `connectors.json` e `service.json`. |
+
+Regras de seguranca:
+
+- nunca retornar `client_secret`, access token, authorization header ou certificados;
+- mascarar campos sensiveis antes de responder tools;
+- permitir allowlist de connectors testaveis;
+- manter tools de execucao desativaveis em producao;
+- preservar propagacao de `traceparent`, `X-Trace-ID` e `X-Correlation-ID` nas chamadas diagnosticas.
+
+Nesta fase, o contrato fica documentado para alinhar o Studio, agentes e proximas implementacoes. A execucao real das tools administrativas deve respeitar as mesmas politicas de resiliência, token gerenciado e redaction ja existentes no conector.
