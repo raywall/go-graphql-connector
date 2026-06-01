@@ -31,7 +31,7 @@ func newManagedToken(tokenURL, clientID, clientSecret string, headers map[string
 		clientSecret: clientSecret,
 		headers:      headers,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 29 * time.Second,
 			Transport: &http.Transport{
 				TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
 				TLSClientConfig: &tls.Config{

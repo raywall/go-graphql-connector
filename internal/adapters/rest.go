@@ -3,6 +3,7 @@ package adapters
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,7 +28,7 @@ type TokenProvider interface {
 	GetToken() (string, error)
 }
 
-func NewRestAdapter(baseURL, method string, headers map[string]string, body string) (Adapter, error) {
+func NewRestAdapter(baseURL, method string, headers map[string]string, body string, skipTLSVerify bool) (Adapter, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("rest baseUrl is required")
 	}
@@ -36,7 +37,15 @@ func NewRestAdapter(baseURL, method string, headers map[string]string, body stri
 	}
 
 	return &RestAdapter{
-		client:  &http.Client{Timeout: 10 * time.Second},
+		client: &http.Client{
+			Timeout: 29 * time.Second,
+			Transport: &http.Transport{
+				TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: skipTLSVerify, // Controlled by explicit service.json opt-in for private CAs.
+				},
+			},
+		},
 		baseURL: baseURL,
 		method:  method,
 		headers: headers,

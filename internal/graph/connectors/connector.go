@@ -102,7 +102,8 @@ func NewConnectorWithOptions(config ConnectorConfig, options Options) (Connector
 		method, _ := config.AdapterConfig["method"].(string)
 		body, _ := config.AdapterConfig["body"].(string)
 		headers := stringMap(config.AdapterConfig["headers"])
-		adapter, err = adapters.NewRestAdapter(baseURL, method, headers, body)
+		skipTLSVerify, _ := config.AdapterConfig["skipTLSVerify"].(bool)
+		adapter, err = adapters.NewRestAdapter(baseURL, method, headers, body, skipTLSVerify)
 		if restAdapter, ok := adapter.(*adapters.RestAdapter); ok {
 			restAdapter.SetTokenProvider(options.TokenProvider)
 		}
