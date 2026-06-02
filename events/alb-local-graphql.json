@@ -1,0 +1,17 @@
+{
+  "requestContext": {
+    "elb": {
+      "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/go-graphql-connector-local/0000000000000000"
+    }
+  },
+  "httpMethod": "POST",
+  "path": "/graphql",
+  "queryStringParameters": {},
+  "headers": {
+    "accept": "application/json",
+    "content-type": "application/json",
+    "host": "localhost"
+  },
+  "body": "{\"query\":\"query { dataSources(pedidoID: \\\"PED-9988\\\", customerID: \\\"cust-42\\\") { order { pedido_id status valor_total itens { produto_id quantidade } } customer { id status riskSegment creditLimit sourceSystem } } }\"}",
+  "isBase64Encoded": false
+}
