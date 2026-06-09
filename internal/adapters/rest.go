@@ -3,6 +3,7 @@ package adapters
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 	"net/http"
 	"reflect"
 	"time"
+
+	"github.com/raywall/go-graphql-connector/internal/tracing"
 )
 
 type RestAdapter struct {
@@ -25,7 +28,7 @@ type TokenProvider interface {
 	GetToken() (string, error)
 }
 
-func NewRestAdapter(baseURL, method string, headers map[string]string, body string) (Adapter, error) {
+func NewRestAdapter(baseURL, method string, headers map[string]string, body string, skipTLSVerify bool) (Adapter, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("rest baseUrl is required")
 	}
@@ -34,7 +37,15 @@ func NewRestAdapter(baseURL, method string, headers map[string]string, body stri
 	}
 
 	return &RestAdapter{
-		client:  &http.Client{Timeout: 10 * time.Second},
+		client: &http.Client{
+			Timeout: 29 * time.Second,
+			Transport: &http.Transport{
+				TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: skipTLSVerify, // Controlled by explicit service.json opt-in for private CAs.
+				},
+			},
+		},
 		baseURL: baseURL,
 		method:  method,
 		headers: headers,
@@ -76,12 +87,13 @@ func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]inter
 	for name, value := range r.headers {
 		req.Header.Set(name, value)
 	}
+	tracing.Inject(req)
 	if r.tokenProvider != nil && req.Header.Get("Authorization") == "" {
 		token, err := r.tokenProvider.GetToken()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get STS token for REST API %s: %v", url, err)
 		}
-		log.Printf("Using token from provider for REST API %s: %s", url, token)
+		log.Printf("Using token from provider for REST API %s: %s", url, maskSecret(token))
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
@@ -105,4 +117,11 @@ func (r *RestAdapter) GetData(ctx context.Context, key string) (map[string]inter
 		return nil, fmt.Errorf("failed to decode REST API response: %v", err)
 	}
 	return data, nil
+}
+
+func maskSecret(value string) string {
+	if len(value) <= 8 {
+		return "***"
+	}
+	return value[:4] + "***" + value[len(value)-4:]
 }

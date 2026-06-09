@@ -26,7 +26,8 @@ func CORS(allowedOrigins []string) Middleware {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Serial-Number, x-api-filter")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Serial-Number, x-api-filter, traceparent, X-Trace-ID, X-Span-ID, X-Parent-Span-ID")
+				w.Header().Set("Access-Control-Expose-Headers", "x-graphql-elapsed-time, traceparent, X-Trace-ID")
 				w.Header().Set("Access-Control-Max-Age", "600")
 			}
 			if r.Method == http.MethodOptions {

@@ -9,7 +9,7 @@ func (*nilTokenProvider) GetToken() (string, error) {
 }
 
 func TestRestAdapterIgnoresTypedNilTokenProvider(t *testing.T) {
-	adapter, err := NewRestAdapter("https://example.com", "GET", nil, "")
+	adapter, err := NewRestAdapter("https://example.com", "GET", nil, "", false)
 	if err != nil {
 		t.Fatalf("NewRestAdapter returned error: %v", err)
 	}

@@ -1,0 +1,84 @@
+{
+  "types": [
+    {
+      "name": "OrderItem",
+      "fields": [
+        { "name": "sku", "type": "String" },
+        { "name": "quantity", "type": "Int" },
+        { "name": "category", "type": "String" }
+      ]
+    },
+    {
+      "name": "Order",
+      "fields": [
+        { "name": "id", "type": "String" },
+        { "name": "status", "type": "String" },
+        { "name": "channel", "type": "String" },
+        { "name": "total", "type": "Float" },
+        { "name": "currency", "type": "String" },
+        { "name": "items", "type": "List", "ofType": "OrderItem" }
+      ]
+    },
+    {
+      "name": "Customer",
+      "fields": [
+        { "name": "id", "type": "String" },
+        { "name": "name", "type": "String" },
+        { "name": "tier", "type": "String" },
+        { "name": "risk_score", "type": "Int" },
+        { "name": "notification_channel", "type": "String" },
+        { "name": "email", "type": "String" },
+        { "name": "phone", "type": "String" }
+      ]
+    },
+    {
+      "name": "InventoryItem",
+      "fields": [
+        { "name": "sku", "type": "String" },
+        { "name": "available", "type": "Int" },
+        { "name": "reserved", "type": "Int" },
+        { "name": "warehouse", "type": "String" }
+      ]
+    },
+    {
+      "name": "Carrier",
+      "fields": [
+        { "name": "id", "type": "String" },
+        { "name": "name", "type": "String" },
+        { "name": "priority", "type": "Int" }
+      ]
+    },
+    {
+      "name": "DeliveryPolicy",
+      "fields": [
+        { "name": "region", "type": "String" },
+        { "name": "promise_days", "type": "Int" },
+        { "name": "carriers", "type": "List", "ofType": "Carrier" }
+      ]
+    },
+    {
+      "name": "EcommerceDataSources",
+      "fields": [
+        { "name": "order", "type": "Object", "ofType": "Order" },
+        { "name": "customer", "type": "Object", "ofType": "Customer" },
+        { "name": "inventory", "type": "List", "ofType": "InventoryItem" },
+        { "name": "deliveryPolicy", "type": "Object", "ofType": "DeliveryPolicy" }
+      ]
+    }
+  ],
+  "query": {
+    "name": "Query",
+    "fields": [
+      {
+        "name": "dataSources",
+        "type": "Object",
+        "ofType": "EcommerceDataSources",
+        "args": [
+          { "name": "orderID", "type": "String" },
+          { "name": "customerID", "type": "String" },
+          { "name": "region", "type": "String" }
+        ]
+      }
+    ]
+  }
+}

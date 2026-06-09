@@ -2,3 +2,5 @@ examples/utils
 main
 .DS_Store
 .gocache/
+.dockerignore
+.aws-sam/

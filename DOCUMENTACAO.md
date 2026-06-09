@@ -64,6 +64,60 @@ x-graphql-elapsed-time: 3
 
 O valor representa milissegundos e retorna apenas o numero.
 
+## Execucao no workspace integrado
+
+Quando usado junto com `routing-slip-pattern` e `custom-business-metrics`, o conector pode ser iniciado pela stack local da raiz de `workflows`.
+
+Modo com containers separados:
+
+```bash
+cd /Users/raysouz/Workspace/estudos/workflows
+make prepare
+```
+
+Modo compacto, util para testes rapidos:
+
+```bash
+cd /Users/raysouz/Workspace/estudos/workflows
+make run-compact
+```
+
+Nos dois modos, o endpoint GraphQL fica disponivel em:
+
+```text
+http://localhost:8090/graphql
+```
+
+O modo compacto executa os tres projetos principais em um unico container e usa o exemplo `ecommerce-distributed` do conector. Para validar dependencias externas com maior isolamento, prefira a stack padrao com containers separados.
+
+## Exemplo ecommerce-distributed
+
+O diretorio `examples/ecommerce-distributed` contem uma configuracao dedicada ao case distribuido de ecommerce usado pelo `routing-slip-pattern`.
+
+Ele expoe a query:
+
+```graphql
+query ($orderID: String!, $customerID: String!, $region: String!) {
+  dataSources(orderID: $orderID, customerID: $customerID, region: $region) {
+    order { id status total items { sku quantity } }
+    customer { id tier notification_channel }
+    inventory { sku available warehouse }
+    deliveryPolicy { region promise_days carriers { id name priority } }
+  }
+}
+```
+
+Connectors configurados:
+
+| Campo GraphQL | Origem REST |
+|---|---|
+| `order` | `/ecommerce/v1/orders/{orderID}` |
+| `customer` | `/ecommerce/v1/customers/{customerID}` |
+| `inventory` | `/ecommerce/v1/inventory/orders/{orderID}` |
+| `deliveryPolicy` | `/ecommerce/v1/delivery/policies/{region}` |
+
+O exemplo usa token STS mockado, `responseTransform`, retries e circuit breaker nos connectors que representam dependencias mais sensiveis.
+
 ## Exemplo com Configuracao no DynamoDB, Dados no Redis e API REST
 
 O projeto tambem possui um exemplo em `examples/dynamodb` que carrega `schema` e `connectors` a partir de uma tabela DynamoDB. Nesse exemplo, o DynamoDB e usado apenas como origem de configuracao; os dados consultados pela GraphQL API vêm de Redis e de uma API HTTP.
@@ -654,6 +708,46 @@ adapter := graphql.WrapHandler(wrappedHandler).ToAPIGatewayV2()
 
 ## Funcoes Publicas Principais
 
+## Preparacao Tecnica e Feature Flags
+
+O conector possui uma base de configuracao para ativar capacidades operacionais sem mudar o contrato principal de consulta. Essa camada concentra flags de rastreabilidade, resiliencia, MCP e mascaramento de dados sensiveis.
+
+Exemplo:
+
+```json
+{
+  "features": {
+    "tracing_enabled": true,
+    "mcp_enabled": false,
+    "resilience_enabled": true
+  },
+  "security": {
+    "redaction": {
+      "enabled": true,
+      "fields": [
+        "authorization",
+        "client_secret",
+        "access_token",
+        "refresh_token",
+        "password",
+        "token",
+        "api_key",
+        "x-api-key"
+      ]
+    }
+  }
+}
+```
+
+| Campo | Padrão | Uso |
+|---|---:|---|
+| `features.tracing_enabled` | `true` | Controla o middleware de trace aplicado pelo `NewHandler`. |
+| `features.mcp_enabled` | `false` | Reserva para o MCP Admin Server. |
+| `features.resilience_enabled` | `true` | Indica uso de retry/backoff/circuit breaker padronizados nos connectors configurados. |
+| `security.redaction.enabled` | `true` | Indica que dados sensíveis devem ser mascarados em logs e diagnósticos. |
+
+O adapter REST já mascara tokens em logs. O token continua sendo usado no header `Authorization`, mas não é impresso integralmente.
+
 ### `graphql.LoadConfig(path string) (*graphql.Config, error)`
 
 Carrega um arquivo JSON de configuracao e resolve paths locais relativos ao diretorio do arquivo.
@@ -672,11 +766,32 @@ api, err := graphql.New(config, resources, "us-east-1", "http://localhost:4566")
 
 ### `(*GraphQL).NewHandler(pretty bool, middlewares ...graphql.Middleware) http.Handler`
 
-Cria o handler GraphQL. O middleware de tempo de execucao e aplicado automaticamente.
+Cria o handler GraphQL. Os middlewares de rastreabilidade e tempo de execucao sao aplicados automaticamente.
 
 ```go
 handler := api.NewHandler(true)
 ```
+
+O handler entende o header W3C `traceparent`. Quando a requisicao ja chega com esse header, o conector preserva o `trace_id` e usa esse contexto nas chamadas feitas pelos connectors. Quando a requisicao nao possui trace, o conector cria um novo identificador.
+
+Exemplo de requisicao:
+
+```http
+POST /graphql HTTP/1.1
+Content-Type: application/json
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+```
+
+Os adapters REST propagam os headers abaixo para as APIs integradas:
+
+```http
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-9f3a4c7b12e64010-01
+X-Trace-ID: 4bf92f3577b34da6a3ce929d0e0e4736
+X-Span-ID: 9f3a4c7b12e64010
+X-Parent-Span-ID: 00f067aa0ba902b7
+```
+
+Esse comportamento permite acompanhar uma consulta GraphQL do workflow ate a API externa consultada pelo connector.
 
 ### `graphql.WrapHandler(h http.Handler)`
 
@@ -709,9 +824,113 @@ Toda resposta GraphQL criada com `api.NewHandler(...)` recebe:
 
 ```http
 x-graphql-elapsed-time: 4
+X-Trace-ID: 4bf92f3577b34da6a3ce929d0e0e4736
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-O valor e o tempo total de processamento da requisicao em milissegundos.
+O header `x-graphql-elapsed-time` informa o tempo total de processamento da requisicao em milissegundos. Os headers `X-Trace-ID` e `traceparent` permitem correlacionar a chamada com o workflow, as APIs integradas e o `custom-business-metrics`.
+
+## Rastreabilidade Distribuida
+
+O conector suporta rastreabilidade distribuida para que uma chamada originada no `routing-slip-pattern` continue identificavel dentro do GraphQL connector e nas APIs consultadas por ele.
+
+Fluxo:
+
+```mermaid
+sequenceDiagram
+    participant Workflow as routing-slip-pattern
+    participant GraphQL as go-graphql-connector
+    participant REST as API REST integrada
+
+    Workflow->>GraphQL: query GraphQL + traceparent
+    GraphQL->>GraphQL: preserva trace_id e cria contexto
+    GraphQL->>REST: connector REST + traceparent filho
+    REST-->>GraphQL: resposta da API
+    GraphQL-->>Workflow: resposta + X-Trace-ID
+```
+
+Pontos importantes:
+
+- o `trace_id` permanece o mesmo durante toda a jornada;
+- cada connector REST recebe um novo `span_id`;
+- o handler GraphQL e cada connector criam spans usando a API do OpenTelemetry;
+- o `traceparent` e propagado automaticamente pelo adapter REST;
+- CORS permite os headers `traceparent`, `X-Trace-ID`, `X-Span-ID` e `X-Parent-Span-ID`;
+- tokens STS continuam funcionando normalmente e nao sao expostos nos headers de rastreio.
+
+Exemplo de uso com `curl`:
+
+```bash
+curl --request POST \
+  --url http://localhost:8090/graphql \
+  --header 'content-type: application/json' \
+  --header 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
+  --data '{"query":"query { dataSources(id: \"PED-1001\") { order { id status } } }"}'
+```
+
+## Resiliencia por Connector
+
+A resiliencia configuravel por connector permite lidar com falhas transitorias de APIs, timeouts e instabilidade sem jogar essa responsabilidade para o workflow.
+
+Exemplo:
+
+```json
+{
+  "field": "order",
+  "adapter": "rest",
+  "adapterConfig": {
+    "baseUrl": "https://mock.raysouz.studio",
+    "endpoint": "/orders/{id}",
+    "method": "GET"
+  },
+  "keyPattern": "/orders/{id}",
+  "timeoutMs": 1500,
+  "retries": 2,
+  "resilience": {
+    "backoff": "exponential",
+    "initial_interval_ms": 100,
+    "max_interval_ms": 1000,
+    "jitter": true,
+    "circuit_breaker": {
+      "enabled": true,
+      "failure_threshold": 5,
+      "open_timeout_ms": 30000
+    }
+  }
+}
+```
+
+Campos principais:
+
+| Campo | Uso |
+|---|---|
+| `timeoutMs` | Timeout por tentativa do connector. |
+| `retries` | Quantidade de novas tentativas após a primeira chamada. |
+| `resilience.backoff` | `exponential`, `fixed` ou `none`. |
+| `resilience.initial_interval_ms` | Espera inicial entre tentativas. |
+| `resilience.max_interval_ms` | Limite máximo do backoff. |
+| `resilience.jitter` | Adiciona variação ao backoff para evitar rajadas. |
+| `resilience.circuit_breaker.enabled` | Liga o circuit breaker do connector. |
+| `resilience.circuit_breaker.failure_threshold` | Falhas consecutivas necessárias para abrir o circuito. |
+| `resilience.circuit_breaker.open_timeout_ms` | Tempo em que o circuito permanece aberto. |
+
+Classificação de erros:
+
+| Classe | Quando ocorre | Retry? |
+|---|---|---|
+| `retryable` | Erros transitórios genéricos. | Sim |
+| `timeout` | Deadline ou timeout da chamada. | Sim |
+| `auth_error` | Erros de autenticação/autorização. | Não |
+| `non_retryable` | Configuração inválida, argumento ausente ou erro funcional da resposta. | Não |
+| `circuit_open` | Circuit breaker aberto. | Não |
+
+O estado do circuit breaker fica disponível programaticamente:
+
+```go
+states := api.ConnectorCircuitStates()
+```
+
+Cada chamada de connector também registra atributos de span como `connector.field`, `connector.attempt`, `connector.retries`, `connector.error_class` e `connector.circuit_breaker.enabled`.
 
 ## Validacao
 
@@ -726,3 +945,104 @@ Para checar concorrencia nos pacotes principais:
 ```bash
 go test -race ./internal/graph ./internal/graph/connectors ./graphql
 ```
+
+## Integracao com State Store do Routing Slip
+
+O state store persistente do `routing-slip-pattern` guarda snapshots de execucao e permite retomar workflows a partir do ponto salvo. O `go-graphql-connector` nao precisa persistir snapshots do workflow, mas participa desse desenho como fonte de enriquecimento reexecutavel e rastreavel.
+
+Quando um step `graphql_enrich` consulta o conector, o resultado enriquecido e salvo dentro do snapshot do workflow. Se a execucao falhar depois da consulta, o reprocessamento pode continuar a partir do cursor salvo sem repetir etapas anteriores ja concluidas. Caso o cursor volte manualmente para uma etapa ja marcada como `success`, a idempotencia do runtime pode registrar `idempotent_skip` e seguir o fluxo.
+
+Boas praticas para usar o conector com state store:
+
+- propagar `traceparent`, `X-Trace-ID` e `X-Correlation-ID` nas chamadas;
+- manter `timeoutMs`, `retries` e circuit breaker configurados em connectors que consultam APIs externas;
+- usar respostas deterministicas quando o enriquecimento sera reutilizado apos reprocessamento;
+- evitar side effects em connectors de leitura, deixando efeitos externos para handlers explicitos do workflow.
+
+Exemplo de step:
+
+```yaml
+- id: carregar-produto
+  name: graphql_enrich
+  params:
+    endpoint: http://go-graphql-connector:8090/graphql
+    target: catalogo
+    result_path: dataSources
+    required: true
+```
+
+O snapshot persistido pelo workflow guarda o payload apos esse enriquecimento, junto com cursor, historico, `trace_id` e estado granular da etapa.
+
+## MCP Admin
+
+O MCP Admin define uma camada para expor capacidades administrativas do `go-graphql-connector` sem vazar segredos ou acoplar o Studio diretamente aos arquivos de configuracao.
+
+Tools previstas para o MCP Admin:
+
+| Tool | Objetivo |
+|---|---|
+| `list_connectors` | Lista connectors configurados. |
+| `describe_connector` | Mostra adapter, timeout, resiliencia e schema esperado. |
+| `test_connector` | Testa um connector isoladamente com entrada controlada. |
+| `execute_graphql_query` | Executa uma query diagnostica controlada. |
+| `get_token_status` | Mostra status do token gerenciado sem retornar o token. |
+| `get_circuit_state` | Mostra estado dos circuit breakers por connector. |
+| `validate_config` | Valida `schema.json`, `connectors.json` e `service.json`. |
+
+Regras de seguranca:
+
+- nunca retornar `client_secret`, access token, authorization header ou certificados;
+- mascarar campos sensiveis antes de responder tools;
+- permitir allowlist de connectors testaveis;
+- manter tools de execucao desativaveis em producao;
+- preservar propagacao de `traceparent`, `X-Trace-ID` e `X-Correlation-ID` nas chamadas diagnosticas.
+
+O contrato deve alinhar Studio, agentes e automacoes de suporte. A execucao real das tools administrativas deve respeitar as mesmas politicas de resiliencia, token gerenciado e redaction ja existentes no conector.
+
+## Planner MCP e Integracoes GraphQL
+
+O planner assistido por MCP do `routing-slip-pattern` pode sugerir steps `graphql_enrich` ou `rest_call` quando identifica enriquecimento, consulta a API ou necessidade de compor dados externos.
+
+Para o `go-graphql-connector`, isso significa que a configuracao de connectors deve continuar explicita e auditavel. O planner pode gerar um rascunho de step, mas a query, variaveis, `target` e `result_path` devem ser revisados antes da execucao.
+
+Exemplo de saida esperada pelo planner:
+
+```yaml
+- id: carregar-contexto
+  name: graphql_enrich
+  params:
+    endpoint: http://go-graphql-connector:8090/graphql
+    query: "query { dataSources { status } }"
+    result_path: dataSources
+    target: contexto
+    required: true
+```
+
+Recomendacoes:
+
+- validar a query com `validate_config` ou consulta manual antes de usar em producao;
+- manter `timeoutMs`, `retries` e circuit breaker nos connectors envolvidos;
+- revisar tokens, certificados e redaction;
+- preferir consultas sem side effect para etapas de enriquecimento;
+- documentar quais campos enriquecidos entram no payload persistido do workflow.
+
+## Publicacao do modulo Go
+
+O modulo publico usa o caminho:
+
+```text
+github.com/raywall/go-graphql-connector
+```
+
+Pull requests para `main` executam `go mod tidy`, testes e `go vet`. Depois do merge, o workflow
+`Publish Go Module` cria automaticamente a proxima versao patch SemVer, iniciando em `v0.1.0`,
+publica a tag e solicita a versao ao Go Module Proxy para indexacao no `pkg.go.dev`.
+
+Exemplo de consumo:
+
+```bash
+go get github.com/raywall/go-graphql-connector@latest
+```
+
+Uma reexecucao da Action para o mesmo commit reutiliza a tag existente e nao gera uma versao
+adicional.

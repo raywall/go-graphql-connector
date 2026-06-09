@@ -24,6 +24,7 @@ type Resolver interface {
 	ResolveField(fieldName string, p graphql.ResolveParams) (interface{}, error)
 	AddCloudContext(ctx cloud.CloudContext) error
 	AddMockConfig(mockConfig string) error
+	ConnectorCircuitStates() map[string]connectors.CircuitState
 }
 
 type resolver struct {
@@ -63,6 +64,14 @@ func NewResolverWithOptions(connectorConfig string, options ResolverOptions) (Re
 			Values: nil,
 		},
 	}, nil
+}
+
+func (r *resolver) ConnectorCircuitStates() map[string]connectors.CircuitState {
+	out := make(map[string]connectors.CircuitState, len(r.dataConnectors))
+	for field, connector := range r.dataConnectors {
+		out[field] = connector.CircuitState()
+	}
+	return out
 }
 
 func (r *resolver) AddCloudContext(ctx cloud.CloudContext) error {
