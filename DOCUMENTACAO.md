@@ -1025,3 +1025,24 @@ Recomendacoes:
 - revisar tokens, certificados e redaction;
 - preferir consultas sem side effect para etapas de enriquecimento;
 - documentar quais campos enriquecidos entram no payload persistido do workflow.
+
+## Publicacao do modulo Go
+
+O modulo publico usa o caminho:
+
+```text
+github.com/raywall/go-graphql-connector
+```
+
+Pull requests para `main` executam `go mod tidy`, testes e `go vet`. Depois do merge, o workflow
+`Publish Go Module` cria automaticamente a proxima versao patch SemVer, iniciando em `v0.1.0`,
+publica a tag e solicita a versao ao Go Module Proxy para indexacao no `pkg.go.dev`.
+
+Exemplo de consumo:
+
+```bash
+go get github.com/raywall/go-graphql-connector@latest
+```
+
+Uma reexecucao da Action para o mesmo commit reutiliza a tag existente e nao gera uma versao
+adicional.
